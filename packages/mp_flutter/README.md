@@ -4,7 +4,7 @@
 `dev_dependency`,跑一条命令,产出的小程序用微信开发者工具直接打开。
 
 完整项目文档(能力清单、支持矩阵、已知限制)见仓库根
-[README](https://github.com/<owner>/<repo>#readme)。本页只讲这个包
+[README](https://github.com/jackwangfeng/mp-flutter#readme)。本页只讲这个包
 本身:CLI 用法、配置文件、退出码。
 
 ## 安装
@@ -16,7 +16,7 @@
 dev_dependencies:
   mp_flutter:
     git:
-      url: https://github.com/<owner>/<repo>.git
+      url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
       ref: v0.2.0
 ```

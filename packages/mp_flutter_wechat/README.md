@@ -12,7 +12,7 @@
 dependencies:
   mp_flutter_wechat:
     git:
-      url: https://github.com/<owner>/<repo>.git
+      url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter_wechat
       ref: v0.2.0
 ```

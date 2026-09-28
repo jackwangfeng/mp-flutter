@@ -12,7 +12,7 @@
 dev_dependencies:
   mp_flutter:
     git:
-      url: https://github.com/<owner>/<repo>.git
+      url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
       ref: v0.2.0
 ```
@@ -142,7 +142,7 @@ Actions 的无头 ubuntu 环境跑不了,只能本地手动跑(见 `tools/e2e/RE
 dependencies:
   mp_flutter_wechat:
     git:
-      url: https://github.com/<owner>/<repo>.git
+      url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter_wechat
       ref: v0.2.0
 ```

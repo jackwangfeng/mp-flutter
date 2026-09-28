@@ -15,7 +15,7 @@
 dependencies:
   mp_flutter_native:
     git:
-      url: https://github.com/<owner>/<repo>.git
+      url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter_native
       ref: v0.2.0
 ```
