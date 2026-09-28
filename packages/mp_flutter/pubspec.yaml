@@ -1,6 +1,6 @@
 name: mp_flutter
 description: Compile an existing Flutter project to a WeChat Mini Program without touching its source.
-version: 0.1.0
+version: 0.2.1
 publish_to: none
 
 environment:
