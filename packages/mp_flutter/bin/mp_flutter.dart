@@ -6,6 +6,7 @@ import 'package:mp_flutter/src/flutter_build.dart';
 import 'package:mp_flutter/src/fonts.dart';
 import 'package:mp_flutter/src/version_matrix.dart';
 import 'package:mp_flutter/src/transform/canvaskit_js.dart';
+import 'package:mp_flutter/src/cjk_font.dart' show resolveCjkBoldLevel;
 import 'package:mp_flutter/src/config.dart';
 import 'package:mp_flutter/src/doctor.dart';
 import 'package:mp_flutter/src/size_check.dart';
@@ -40,6 +41,7 @@ typedef PipelineRunner = Future<SizeReport> Function({
   String? target,
   bool licenses,
   String? cjkFont,
+  String? cjkFontBold,
   String? fontBaseUrl,
   String? splashTitle,
   String? splashColor,
@@ -117,6 +119,14 @@ ArgParser buildArgParser() {
             '首屏中文不再逐片下载回退字体、不再因字体到达整体重排;字表外的字仍按需下载分片。'
             '可被 mp_flutter.yaml 的 cjk_font 覆盖。')
     ..addFlag('no-cjk-font', negatable: false, help: '同 --cjk-font=false')
+    ..addOption('cjk-font-bold',
+        allowed: kCjkFontLevels,
+        help: '合一字体的粗体(Noto Sans SC Bold 子集,同一 family、字重 700,单独一个分包 pkg-cjkb,'
+            '与 CanvasKit 初始化并行读取,不挡首帧)。默认跟随 --cjk-font(full 约 1.17MB br,'
+            'level1 约 660KB br),必须与 --cjk-font 同档;false = 不带。'
+            '没有粗体时 w600 以上的中文(标题、价格)由 CanvasKit 合成加粗,每个字形首次出现都要'
+            '逐点加粗轮廓:实测 30 字 22px 段落首次排版无 JIT 时 30ms(真粗体 7ms)。'
+            '可被 mp_flutter.yaml 的 cjk_font_bold 覆盖。')
     ..addOption('font-base-url',
         help: '远端回退字体:回退字体分片(简体中文 Noto)不打进包,运行时从该 https 地址拉取并'
             '缓存到本地文件。构建会在产物下输出待上传目录 mp-fonts-remote/,需原样上传到该地址;'
@@ -297,6 +307,14 @@ Future<int> runCli(
       ? 'false'
       : (args.wasParsed('cjk-font') ? args['cjk-font'] as String : (config.cjkFont ?? 'full'));
   final String? cjkFont = cjkLevel == 'false' ? null : cjkLevel;
+  final String? cjkFontBold;
+  try {
+    cjkFontBold = resolveCjkBoldLevel(
+        cjkFont, args.wasParsed('cjk-font-bold') ? args['cjk-font-bold'] as String : config.cjkFontBold);
+  } on ArgumentError catch (e) {
+    err.writeln('❌ ${e.message}');
+    return 64;
+  }
   final fontBaseUrl = args.wasParsed('font-base-url')
       ? args['font-base-url'] as String
       : config.fontBaseUrl;
@@ -381,6 +399,7 @@ Future<int> runCli(
       target: target,
       licenses: licenses,
       cjkFont: cjkFont,
+      cjkFontBold: cjkFontBold,
       fontBaseUrl: fontBaseUrl,
       splashTitle: config.splashTitle,
       splashColor: config.splashColor,

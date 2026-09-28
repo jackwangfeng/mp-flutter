@@ -69,6 +69,95 @@ async function launchWithRetry(projectPath) {
 const race = (p, ms, tag) => Promise.race([p,
   new Promise((_, rj) => setTimeout(() => rj(new Error('TIMEOUT ' + tag)), ms))]);
 
+// 2026-09-28 排障实录:accept-interact.js/accept-wx.js 报
+// `Error: No context found for objectId N`(accept-interact.js 在 canvas 交互
+// 之后的 onMpBlur 上炸,accept-wx.js 在 onShareAppMessage 上炸)。先在
+// 21dc9f8(上一次这两个脚本全绿的提交)重跑同一套 accept-*.js,同样复现—
+// 排除业务代码回归。查 WeappLog 证实:`cli auto` 实际用的基础库是服务端
+// fetchAttr 按 appid 下发的 3.17.4,完全无视 project.config.json 里锁的
+// libVersion 3.15.0——这是一次环境变化(账号/appid 的基础库策略被服务端调
+// 高),不是本仓库提交引入的。开 `DEBUG=automator:protocol` 抓协议帧进一步
+// 定位到:失败的**只有** `Page.callMethod` 这一条 RPC;同一个 pageId 上
+// `Page.getData`、`App.getCurrentPage`、`App.callFunction`(即 mp.evaluate)
+// 全部正常,且 App.getCurrentPage 重新确认过 pageId 依旧有效——不是句柄过
+// 期,重试同一条 RPC 无效(实测原样报同一个错)。判断是 3.17.4 这个基础库
+// 版本下 `Page.callMethod` 的协议实现本身坏了(automator 客户端已是 npm 最
+// 新的 0.12.1,没有更高版本可升)。
+//
+// 绕过:`page.callMethod(method, ...args)` 不再走原生 `Page.callMethod` RPC,
+// 改用始终正常的 `mp.evaluate()`(走 `App.callFunction`,在 App Service 层跑),
+// 在那一层用小程序官方 API `getCurrentPages()` 拿到当前页面的真实实例,直接
+// `pageInstance[method].apply(pageInstance, args)`——同一个 this、同一份闭包
+// 状态,方法里的 setData 照常触发 WXML 重渲染,效果与框架自己派发事件到这个
+// 方法等价,只是不经过那条坏掉的 RPC 通道。
+//
+// 另外用 Proxy 包一层通用的"句柄过期重试":元素/页面 objectId 在冷启动极短
+// 窗口内偶发整体失效(不限于 callMethod)时,重新取一次句柄(mp.currentPage()
+// 或原 selector 的 page.$())再重试一次;命中特征错误之外的异常原样抛出。这条
+// 和上面的 callMethod 绕过是两个独立的兜底,互不影响。
+const STALE_CONTEXT_RE = /No context found for objectId/;
+
+async function callPageMethod(mp, method, args) {
+  return mp.evaluate(function (m, a) {
+    var pages = typeof getCurrentPages === 'function' ? getCurrentPages() : [];
+    var p = pages && pages[pages.length - 1];
+    if (!p || typeof p[m] !== 'function') {
+      throw new Error('page.' + m + ' 不存在或不是函数(getCurrentPages 拿到的当前页)');
+    }
+    return p[m].apply(p, a);
+  }, method, args);
+}
+
+function wrapElement(mp, pageProxy, selector, element) {
+  let live = element;
+  return new Proxy({}, {
+    get(_, prop) {
+      const orig = live[prop];
+      if (typeof orig !== 'function') return orig;
+      return async function (...args) {
+        try {
+          return await orig.apply(live, args);
+        } catch (e) {
+          if (!STALE_CONTEXT_RE.test((e && e.message) || '')) throw e;
+          const fresh = await pageProxy.$(selector);
+          if (!fresh) throw e;
+          live = fresh;
+          return live[prop](...args);
+        }
+      };
+    },
+  });
+}
+
+function wrapPage(mp, page) {
+  let live = page;
+  const proxy = new Proxy({}, {
+    get(_, prop) {
+      // Page.callMethod 这条 RPC 在当前环境下坏掉了(见上面大段注释),直接
+      // 绕开,不走下面通用的"同一条调用重试"路径(重试也没用)。
+      if (prop === 'callMethod') {
+        return (method, ...args) => callPageMethod(mp, method, args);
+      }
+      const orig = live[prop];
+      if (typeof orig !== 'function') return orig;
+      return async function (...args) {
+        const finish = async (target) => {
+          const ret = await target[prop](...args);
+          return prop === '$' && ret ? wrapElement(mp, proxy, args[0], ret) : ret;
+        };
+        try {
+          return await finish(live);
+        } catch (e) {
+          if (!STALE_CONTEXT_RE.test((e && e.message) || '')) throw e;
+          live = await mp.currentPage();
+          return finish(live);
+        }
+      };
+    },
+  });
+  return proxy;
+}
+
 /**
  * 驱动微信开发者工具跑一个产物工程,收集遥测。
  *
@@ -126,7 +215,7 @@ async function runE2E(opts) {
     // 就位之后才有意义,所以放在 settle 等待之前、boot 等待之后执行。
     if (opts.interact) {
       await new Promise((r) => setTimeout(r, opts.bootMs || 12000));   // 等引擎首帧
-      const page = await race(mp.currentPage(), 15000, 'currentPage');
+      const page = wrapPage(mp, await race(mp.currentPage(), 15000, 'currentPage'));
       await opts.interact(mp, page, (l) => lines.push(l));
     }
     await new Promise((r) => setTimeout(r, opts.settleMs || 30000));

@@ -10,7 +10,7 @@
 ## 安装
 
 仓库尚未发布到 pub.dev,以 git 依赖引入本仓库(公开仓库,无需额外凭证;`ref`
-建议固定到一个发布 tag,例如 `v0.2.0`,而不是 `main`):
+建议固定到一个发布 tag,例如 `v0.2.1`,而不是 `main`):
 
 ```yaml
 dev_dependencies:
@@ -18,7 +18,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.2.0
+      ref: v0.2.1
 ```
 
 是 `dev_dependency`——只在构建期用到,不会进最终的 Flutter Web 产物。
@@ -62,6 +62,7 @@ dart run mp_flutter doctor
 | `--perf-hud` | 开启真机性能测量(`[mp-perf]`/`[mp-boot]` 控制台日志 + 左上角浮层),默认关闭。见下方「真机性能测量」 |
 | `--no-licenses` | 不打包第三方许可证全文(`assets/NOTICES`,换成空占位),默认打包(放在按需分包,只在打开许可证页时下载)。见根 README「包体积与冷启动」 |
 | `--cjk-font=level1\|full` / `--no-cjk-font` | 常用汉字合一字体(Noto Sans SC 子集,brotli 后放独立分包 `pkg-cjk`,启动时直接读文件):`full`(默认)= GB2312 一二级字 + 标点/全角/Latin-1/常用符号,约 1.15MB,真机实测不在首帧关键路径上;`level1` = 仅一级字,约 650KB,但服务端下发文案命中二级字/常用符号时会多一次回退分片下载与整体重排。首屏中文不再逐片下载回退字体、不再因字体到达整体重排;字表外的字仍按需下载分片。取舍见根 README「包体积与冷启动」 |
+| `--cjk-font-bold=level1\|full\|false` | 合一字体的粗体(Noto Sans SC Bold 子集,同一 family、字重 700,独立分包 `pkg-cjkb`,不挡首帧)。默认跟随 `--cjk-font`,必须同档;`false` = 不带,w600 以上的中文由 CanvasKit 合成加粗(无 JIT 时每段首次排版约贵 4 倍)。见根 README「合一字体粗体」 |
 | `--font-base-url <https://...>` | 远端回退字体:简体中文回退字体分片不打进包,运行时从该地址拉取并缓存到本地文件;产物下的 `mp-fonts-remote/` 需原样上传到该地址,且该域名必须加入小程序后台 request 合法域名 |
 | `--no-safe-area` | 关闭构建期入口包装(安全区注入),默认开(`--safe-area`)。工程自带
   `WidgetsFlutterBinding` 子类时用它,见根 README「安全区」一节的限制 |
@@ -86,6 +87,7 @@ perf_hud: false
 safe_area: true
 licenses: true                 # false = 不打包 NOTICES(同 --no-licenses)
 cjk_font: full                  # full(默认)/ level1 / false,同 --cjk-font / --no-cjk-font
+# cjk_font_bold: false          # 粗体:默认跟随 cjk_font(须同档),false = 不带,同 --cjk-font-bold
 # font_base_url: https://cdn.example.com/mp-fonts/   # 远端回退字体(同 --font-base-url)
 splash_title: 我的小店          # 原生启动界面的应用名,缺省用 pubspec 的 name
 splash_color: "#ffffff"        # 启动界面背景色(#rgb / #rrggbb),缺省白色

@@ -73,6 +73,7 @@ Future<SizeReport> runPipeline({
   String? target,
   bool licenses = true,
   String? cjkFont = 'full',
+  String? cjkFontBold,
   String? fontBaseUrl,
   String? splashTitle,
   String? splashColor,
@@ -192,6 +193,9 @@ Future<SizeReport> runPipeline({
   if (cjkFont != null && !kCjkFontSources.containsKey(cjkFont)) {
     throw ArgumentError.value(cjkFont, 'cjkFont', '只能是 ${kCjkFontSources.keys.join(' / ')}');
   }
+  // 粗体(cjk_font_bold):调用方传的是已生效档位(CLI 用 resolveCjkBoldLevel 算好);
+  // 这里只防组合不合法(与常规不同档会出豆腐块,见 cjk_font.dart)
+  if (cjkFontBold != null) resolveCjkBoldLevel(cjkFont, cjkFontBold);
   final mainJsSource = cjkFont != null ? patchFontFallback(mainJsRaw, family: kCjkFontFamily) : mainJsRaw;
   final preambleProbe = injectPreamble('', shimPath: '../bom-shim.js');
   final chunkBudget = (dartChunkBudgetBytes ?? kDartChunkBudgetBytes) -
@@ -254,20 +258,31 @@ Future<SizeReport> runPipeline({
   // 合一字体经 FontManifest 注册:引擎初始化时(首帧前)取清单里的全部字体并
   // 注册,首帧前注册不发 fontsChange。字体本身不进资源分包,brotli 压缩后放进
   // 独立分包 pkg-cjk,boot 一开始就读(见 cjk_font.dart kCjkFontPackage)。
+  // 粗体(cjk_font_bold)同一家族、单独分包 pkg-cjkb:boot 在 dart/wasm 分包请求
+  // 发出后才开始读它;引擎取字体时还没到就先按 404 应答(首帧不等它),到了再经
+  // 入口包装的 loadFontFromList 补注册(见 runtime/cjk-font.js createCjkBold)。
   if (cjkFont != null) {
-    assets['assets/FontManifest.json'] = addCjkFontToManifest(assets['assets/FontManifest.json']);
-    final raw = readCjkFont(await resolvePackageRoot(), level: cjkFont);
-    final tmp = Directory.systemTemp.createTempSync('mp_flutter_cjk_');
-    try {
-      final src = File(p.join(tmp.path, 'cjk.ttf'))..writeAsBytesSync(raw);
-      final dst = File(p.join(tmp.path, 'cjk.ttf.br'));
-      final r = Process.runSync('brotli', ['-q', '11', '-f', src.path, '-o', dst.path]);
-      if (r.exitCode != 0) throw StateError('brotli 压缩常用汉字合一字体失败:${r.stderr}');
-      emitBytes('$kCjkFontPackage/$kCjkFontFile', dst.readAsBytesSync(), kCjkFontPackage);
-    } finally {
-      tmp.deleteSync(recursive: true);
+    assets['assets/FontManifest.json'] =
+        addCjkFontToManifest(assets['assets/FontManifest.json'], bold: cjkFontBold != null);
+    final root = await resolvePackageRoot();
+    void emitFont(List<int> raw, String package, String file) {
+      final tmp = Directory.systemTemp.createTempSync('mp_flutter_cjk_');
+      try {
+        final src = File(p.join(tmp.path, 'cjk.ttf'))..writeAsBytesSync(raw);
+        final dst = File(p.join(tmp.path, 'cjk.ttf.br'));
+        final r = Process.runSync('brotli', ['-q', '11', '-f', src.path, '-o', dst.path]);
+        if (r.exitCode != 0) throw StateError('brotli 压缩常用汉字合一字体失败:${r.stderr}');
+        emitBytes('$package/$file', dst.readAsBytesSync(), package);
+      } finally {
+        tmp.deleteSync(recursive: true);
+      }
+      emitText('$package/$kReadyModule', kReadyModuleSource, package);
     }
-    emitText('$kCjkFontPackage/$kReadyModule', kReadyModuleSource, kCjkFontPackage);
+
+    emitFont(readCjkFont(root, level: cjkFont), kCjkFontPackage, kCjkFontFile);
+    if (cjkFontBold != null) {
+      emitFont(readCjkFont(root, level: cjkFontBold, bold: true), kCjkFontBoldPackage, kCjkFontBoldFile);
+    }
   }
 
   // 许可证(licenses: false / --no-licenses):NOTICES 换成空占位。完全不给的话
@@ -305,7 +320,10 @@ Future<SizeReport> runPipeline({
         '(该域名须加入小程序后台 request 合法域名)。');
   }
 
-  final subPackages = [...dartPackages, _wasmPackage, if (cjkFont != null) kCjkFontPackage, ...bundle.packageRoots];
+  final subPackages = [
+    ...dartPackages, _wasmPackage, if (cjkFont != null) kCjkFontPackage,
+    if (cjkFont != null && cjkFontBold != null) kCjkFontBoldPackage, ...bundle.packageRoots,
+  ];
   // 首帧前必需的分包:只有这些在 boot 时并行拉取;按需分包由资源条目的
   // require.async 在引擎 fetch 时才触发下载
   final bootSubPackages = [...dartPackages, _wasmPackage, ...bundle.bootPackageRoots];
@@ -323,6 +341,9 @@ Future<SizeReport> runPipeline({
       cjkFont: cjkFont == null
           ? null
           : (asset: kCjkFontAsset, package: kCjkFontPackage, file: kCjkFontFile),
+      cjkFontBold: cjkFont == null || cjkFontBold == null
+          ? null
+          : (asset: kCjkFontBoldAsset, package: kCjkFontBoldPackage, file: kCjkFontBoldFile),
       deferredSubPackages: bundle.bootPackageRoots,
     ),
     'main',
@@ -377,7 +398,10 @@ Future<SizeReport> runPipeline({
     entryPagePath: _entryPage,
     // 占位页是 emitProject 之后才计入各包的,额度留 8KB 余量
     preloadRoots: selectPreloadPackages(
-        [_wasmPackage, ...bundle.bootPackageRoots, if (cjkFont != null) kCjkFontPackage, ...dartPackages], packageBytes,
+        [
+          _wasmPackage, ...bundle.bootPackageRoots, if (cjkFont != null) kCjkFontPackage, ...dartPackages,
+          if (cjkFont != null && cjkFontBold != null) kCjkFontBoldPackage,
+        ], packageBytes,
         quotaBytes: kPreloadQuotaBytes - 8 * 1024),
     requireLocation: requireLocation,
     privateInfos: privateInfos,
@@ -691,6 +715,7 @@ const _perfHudInitSnippet = '''
               gl: r.shim.glContext || acquireGlContext(canvas), glAlt: acquireGlContext(canvas),
               images: r.shim.images, fetchHosts: [r.shim.window, r.shim.self],
               typefaceMemo: r.shim.typefaceMemo,
+              fontInfo: { cjkBold: r.shim.cjkBold, fetch: r.shim.window && r.shim.window.fetch },
               setData: (patch, cb) => this.setData(patch, cb) });
             this.mpPerf.start();
           } catch (e) { console.error('[mp-perf] 初始化失败: ' + ((e && e.message) || e)); }

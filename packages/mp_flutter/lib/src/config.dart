@@ -109,6 +109,7 @@ const kKnownConfigKeys = <String>{
   'perf_hud',
   'licenses',
   'cjk_font',
+  'cjk_font_bold',
   'font_base_url',
   'splash_title',
   'splash_color',
@@ -162,6 +163,8 @@ class MpFlutterConfig {
   final bool? licenses;
   /// `cjk_font`:'level1' / 'full' / 'false'(true 视为 full,与默认值一致)。null = 未配置。
   final String? cjkFont;
+  /// `cjk_font_bold`:'level1' / 'full' / 'false'。null = 未配置(或写 true),跟随 cjk_font。
+  final String? cjkFontBold;
   final String? fontBaseUrl;
   final String? splashTitle;
   final String? splashColor;
@@ -180,6 +183,7 @@ class MpFlutterConfig {
     this.perfHud,
     this.licenses,
     this.cjkFont,
+    this.cjkFontBold,
     this.fontBaseUrl,
     this.splashTitle,
     this.splashColor,
@@ -256,6 +260,15 @@ MpFlutterConfig loadConfig(
     throw ConfigParseFailure(path, '$key 只能是 level1 / full / false,实际是:$v(${v.runtimeType})');
   }
 
+  // cjk_font_bold:true = 跟随 cjk_font(与不写相同)
+  String? asCjkBoldLevel(String key) {
+    final v = map[key];
+    if (v == null || v == true) return null;
+    if (v == false) return 'false';
+    if (v is String && kCjkFontLevels.contains(v)) return v;
+    throw ConfigParseFailure(path, '$key 只能是 level1 / full / false,实际是:$v(${v.runtimeType})');
+  }
+
   List<String>? asPrivateInfoList(String key) {
     final v = map[key];
     if (v == null) return null;
@@ -317,6 +330,7 @@ MpFlutterConfig loadConfig(
     perfHud: asBool('perf_hud'),
     licenses: asBool('licenses'),
     cjkFont: asCjkLevel('cjk_font'),
+    cjkFontBold: asCjkBoldLevel('cjk_font_bold'),
     fontBaseUrl: asString('font_base_url'),
     splashTitle: asString('splash_title'),
     splashColor: asString('splash_color'),

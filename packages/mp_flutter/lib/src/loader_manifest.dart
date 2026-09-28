@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'asset_pipeline.dart';
+import 'cjk_font.dart' show kCjkFontFamily;
 
 /// 加载表在产物里的路径(主包根目录)。
 const kLoaderManifestPath = 'mp-manifest.js';
@@ -40,6 +41,9 @@ const kReadyModuleSource = '// [mp-flutter] 分包就位探针:require.async 它
 /// 分包里的 brotli 文件。boot 一开始就 require.async 该分包的就位探针,就位后
 /// 用 readCompressedFile 读出字节,引擎请求 key 时直接应答。
 ///
+/// [cjkFontBold](`cjk_font_bold`):合一字体的粗体,字段同 [cjkFont]。boot 在
+/// dart/wasm 分包请求发出之后才开始读;引擎取用时没到就按 404 应答,到了再补注册。
+///
 /// [deferredSubPackages]:[subPackages] 里不必挡在 CanvasKit 初始化前的分包
 /// (启动资源包,引擎初始化取字体时才用),boot 让它们与 CanvasKit/Dart 并行
 /// 下载,initializeEngine 之前等齐。
@@ -50,6 +54,7 @@ String buildLoaderManifest({
   String? remoteFontBaseUrl,
   List<String> remoteFonts = const [],
   ({String asset, String package, String file})? cjkFont,
+  ({String asset, String package, String file})? cjkFontBold,
   List<String> deferredSubPackages = const [],
 }) {
   final b = StringBuffer()
@@ -119,14 +124,18 @@ String buildLoaderManifest({
         : '    ${jsonEncode(path)}: function () { return inPkg(${jsonEncode(lazy)}, function () { return $body; }); },');
   });
   b.writeln('  },');
-  if (cjkFont != null) {
+  void font(String name, ({String asset, String package, String file}) f) {
     b
-      ..writeln('  cjkFont: {')
-      ..writeln('    key: ${jsonEncode(cjkFont.asset)},')
-      ..writeln('    file: ${jsonEncode('/${cjkFont.package}/${cjkFont.file}')},')
-      ..writeln('    load: function () { return require.async(${_lit('${cjkFont.package}/$kReadyModule')}); },')
+      ..writeln('  $name: {')
+      ..writeln('    key: ${jsonEncode(f.asset)},')
+      ..writeln('    family: ${jsonEncode(kCjkFontFamily)},')
+      ..writeln('    file: ${jsonEncode('/${f.package}/${f.file}')},')
+      ..writeln('    load: function () { return require.async(${_lit('${f.package}/$kReadyModule')}); },')
       ..writeln('  },');
   }
+
+  if (cjkFont != null) font('cjkFont', cjkFont);
+  if (cjkFont != null && cjkFontBold != null) font('cjkFontBold', cjkFontBold);
   if (remoteFontBaseUrl != null && remoteFonts.isNotEmpty) {
     b
       ..writeln('  remoteFonts: {')

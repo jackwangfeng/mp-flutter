@@ -64,6 +64,7 @@ function preloadCjkFont(spec, opts) {
   const o = opts || {};
   const wx = o.wx;
   const log = o.perfLog || null;
+  const label = o.label || 'cjk-font';
   const now = o.now || function () { return Date.now(); };
   const warn = o.warn || function (m) { try { console.warn(m); } catch (e) { /* 忽略 */ } };
   const loadTimeoutMs = o.loadTimeoutMs || CJK_FONT_LOAD_TIMEOUT_MS;
@@ -72,7 +73,7 @@ function preloadCjkFont(spec, opts) {
   // 走 404 分支(中文回退按需下载分片),不让首屏一直等一个卡住的分包。
   return Promise.resolve().then(function () { return withTimeout(spec.load(), loadTimeoutMs); }).then(function () {
     const t1 = now();
-    if (log) log('[mp-perf] cjk-font pkg ' + (t1 - t0) + 'ms');
+    if (log) log('[mp-perf] ' + label + ' pkg ' + (t1 - t0) + 'ms');
     const fs = wx && wx.getFileSystemManager && wx.getFileSystemManager();
     if (!fs || typeof fs.readCompressedFile !== 'function') {
       throw new Error('FileSystemManager.readCompressedFile 不可用(基础库过低)');
@@ -86,13 +87,97 @@ function preloadCjkFont(spec, opts) {
       });
     }).then(function (data) {
       const bytes = toLocalBytes(data);
-      if (log) log('[mp-perf] cjk-font read ' + (now() - t1) + 'ms via readCompressedFile bytes=' + bytes.length);
+      if (log) log('[mp-perf] ' + label + ' read ' + (now() - t1) + 'ms via readCompressedFile bytes=' + bytes.length);
       return bytes;
     });
   }).then(null, function (e) {
-    warn('[mp-flutter] 常用汉字合一字体读取失败,中文改用按需下载的回退字体:' + ((e && e.message) || e));
+    warn((o.failMessage || '[mp-flutter] 常用汉字合一字体读取失败,中文改用按需下载的回退字体:') + ((e && e.message) || e));
     return null;
   });
 }
 
-module.exports = { preloadCjkFont };
+/**
+ * 合一字体的粗体(`cjk_font_bold`,见 lib/src/cjk_font.dart kCjkFontBoldSources)。
+ *
+ * 与常规合一字体同一 family、同一字表,FontManifest 里同一家族的第二个字体;
+ * 引擎按字重匹配,w≥600 的文字落到真粗体上,不再合成加粗。
+ *
+ * 首帧不等它:
+ *   · 调用本函数时才开始读分包(boot 在 dart/wasm 分包请求发出之后调用,
+ *     不挤在关键路径分包前面);
+ *   · 引擎取字体([respond])时,粗体只要不晚于常规字体到就一起交出去——常规
+ *     字体本来就在等,零额外等待,首帧前注册不发 fontsChange;
+ *   · 比常规字体晚:先按 404 应答(引擎打一行 "not found (404)" 警告,照常
+ *     首帧,这期间粗体文字仍是合成加粗),字节到了经 [bridge](挂在
+ *     `self.__mpLateFonts`)交给入口包装,首帧之后 `ui.loadFontFromList` 补注册,
+ *     引擎发一次 fontsChange、框架把段落重排一遍(字形缓存是热的,只多一次
+ *     shaping;粗体字形首次光栅化与首帧时的合成加粗相比便宜得多);
+ *   · 常规字体读取失败(null)时粗体也不注册:家族里只剩粗体,常规文字也会
+ *     落到它上面。
+ * 没有入口包装(`--no-safe-area`)时没人 listen,晚到的粗体就不用了(粗体文字
+ * 继续合成加粗,正确性不受影响)。
+ *
+ * [spec] 是加载表的 `cjkFontBold`:{ key, family, file, load() };
+ * [regular] 是常规合一字体的 preloadCjkFont 结果。
+ */
+function createCjkBold(spec, regular, opts) {
+  const o = opts || {};
+  const log = o.perfLog || null;
+  const now = o.now || function () { return Date.now(); };
+  const state = { status: 'loading' };
+  const bytes = preloadCjkFont(spec, {
+    wx: o.wx, perfLog: log, now: o.now, warn: o.warn, loadTimeoutMs: o.loadTimeoutMs, label: 'cjk-bold',
+    failMessage: '[mp-flutter] 合一字体粗体读取失败,粗体中文改由 CanvasKit 合成加粗:',
+  });
+  let listener = null;
+  let pending = null;
+  let lateAt = 0;
+
+  function deliver() {
+    if (!listener || !pending) return;
+    const b = pending;
+    pending = null;
+    state.status = 'late-loaded';
+    if (log) log('[mp-perf] cjk-bold 补注册(首帧后 loadFontFromList,引擎发一次 fontsChange),404 后 ' + (now() - lateAt) + 'ms');
+    try { listener(b, spec.family); } catch (e) {
+      try { console.warn('[mp-flutter] 合一字体粗体补注册失败:' + ((e && e.message) || e)); } catch (e2) { /* 忽略 */ }
+    }
+  }
+
+  const LATE = {};
+  function respond() {
+    const t = now();
+    return Promise.race([bytes, regular.then(function () { return LATE; })]).then(function (r) {
+      return regular.then(function (reg) {
+        if (!reg) { state.status = 'skipped'; return null; }
+        if (r === LATE) {
+          state.status = 'late';
+          lateAt = now();
+          if (log) log('[mp-perf] cjk-bold 未就绪,首帧不等(404),到了再补注册');
+          bytes.then(function (b) {
+            if (!b) { state.status = 'failed'; return; }
+            pending = b;
+            deliver();
+          });
+          return null;
+        }
+        if (!r) { state.status = 'failed'; return null; }
+        state.status = 'served';
+        if (log) log('[mp-perf] cjk-bold 随常规字体注册,引擎取用等待 ' + (now() - t) + 'ms');
+        return r;
+      });
+    });
+  }
+
+  const bridge = {
+    /** 入口包装在首帧之后调用:[fn](bytes: Uint8Array, family: string)。 */
+    listen: function (fn) {
+      listener = typeof fn === 'function' ? fn : null;
+      deliver();
+    },
+  };
+
+  return { bytes: bytes, respond: respond, bridge: bridge, state: state };
+}
+
+module.exports = { preloadCjkFont, createCjkBold };

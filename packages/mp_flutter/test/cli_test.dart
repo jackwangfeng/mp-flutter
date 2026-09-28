@@ -62,6 +62,7 @@ void main() {
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -103,6 +104,7 @@ void main() {
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -148,6 +150,7 @@ void main() {
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -192,6 +195,7 @@ void main() {
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -241,6 +245,7 @@ void main() {
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -319,6 +324,7 @@ void main() {
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -426,6 +432,7 @@ void main() {
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -483,6 +490,7 @@ require_location: true
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -532,6 +540,7 @@ require_location: true
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -570,6 +579,7 @@ require_location: true
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -613,6 +623,7 @@ some_unknown_future_key: 1
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -655,6 +666,7 @@ esbuild: tools/esbuild/bin/esbuild
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -695,6 +707,7 @@ esbuild: tools/esbuild/bin/esbuild
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -735,6 +748,7 @@ esbuild: tools/esbuild/bin/esbuild
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -784,6 +798,7 @@ private_infos: [chooseLocation, getFuzzyLocation]
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -827,6 +842,7 @@ private_infos: [chooseLocation]
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -867,6 +883,7 @@ private_infos: [chooseLocation]
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -908,6 +925,7 @@ private_infos: [notARealApi]
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -947,6 +965,7 @@ private_infos: [notARealApi]
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -989,6 +1008,7 @@ private_infos: [notARealApi]
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -1036,6 +1056,7 @@ private_infos: [notARealApi]
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -1072,6 +1093,7 @@ private_infos: [notARealApi]
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -1109,6 +1131,7 @@ private_infos: [notARealApi]
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -1146,6 +1169,7 @@ private_infos: [notARealApi]
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -1201,6 +1225,7 @@ private_infos: [notARealApi]
           bool perfHud = false,
           bool licenses = true,
           String? cjkFont = 'level1',
+          String? cjkFontBold,
           String? fontBaseUrl,
           String? splashTitle,
           String? splashColor,
@@ -1458,9 +1483,11 @@ esbuild: tools/esbuild/bin/esbuild
     late Directory projectDir;
     late Map<String, Object?> seen;
     String? cjkSeen;
+    String? boldSeen;
     setUp(() {
       projectDir = Directory.systemTemp.createTempSync('mpf_cli_size_');
       cjkSeen = null;
+      boldSeen = null;
       File(p.join(projectDir.path, 'pubspec.yaml'))
           .writeAsStringSync('name: x\ndependencies:\n  flutter:\n    sdk: flutter\n');
       seen = {};
@@ -1483,6 +1510,7 @@ esbuild: tools/esbuild/bin/esbuild
       bool perfHud = false,
       bool licenses = true,
       String? cjkFont = 'full',
+      String? cjkFontBold,
       String? fontBaseUrl,
       String? splashTitle,
       String? splashColor,
@@ -1496,6 +1524,7 @@ esbuild: tools/esbuild/bin/esbuild
         'splashTitle': splashTitle, 'splashColor': splashColor,
       };
       cjkSeen = cjkFont;
+      boldSeen = cjkFontBold;
       return SizeReport(const {}, const []);
     }
 
@@ -1530,6 +1559,31 @@ esbuild: tools/esbuild/bin/esbuild
       expect(await runCli(['--project', projectDir.path], pipelineRunner: fake), 0);
       expect(cjkSeen, 'full');
       yaml('cjk_font: level2\n');
+      expect(await runCli(['--project', projectDir.path], pipelineRunner: fake), 64);
+    });
+
+    test('合一字体粗体默认跟随 cjk_font;--cjk-font-bold / cjk_font_bold;档位不一致报错', () async {
+      expect(await runCli(['--project', projectDir.path], pipelineRunner: fake), 0);
+      expect(boldSeen, 'full');
+      expect(await runCli(['--project', projectDir.path, '--cjk-font=level1'], pipelineRunner: fake), 0);
+      expect(boldSeen, 'level1');
+      expect(await runCli(['--project', projectDir.path, '--cjk-font-bold=false'], pipelineRunner: fake), 0);
+      expect((cjkSeen, boldSeen), ('full', null));
+      expect(await runCli(['--project', projectDir.path, '--no-cjk-font'], pipelineRunner: fake), 0);
+      expect(boldSeen, isNull);
+      final err = StringBuffer();
+      expect(await runCli(['--project', projectDir.path, '--cjk-font-bold=level1'], stderrSink: err, pipelineRunner: fake), 64);
+      expect(err.toString(), contains('同一字表'));
+      expect(await runCli(['--project', projectDir.path, '--no-cjk-font', '--cjk-font-bold=full'], pipelineRunner: fake), 64);
+      yaml('cjk_font: level1\ncjk_font_bold: false\n');
+      expect(await runCli(['--project', projectDir.path], pipelineRunner: fake), 0);
+      expect(boldSeen, isNull);
+      expect(await runCli(['--project', projectDir.path, '--cjk-font-bold=level1'], pipelineRunner: fake), 0);
+      expect(boldSeen, 'level1');
+      yaml('cjk_font: level1\ncjk_font_bold: true\n');
+      expect(await runCli(['--project', projectDir.path], pipelineRunner: fake), 0);
+      expect(boldSeen, 'level1');
+      yaml('cjk_font_bold: bold\n');
       expect(await runCli(['--project', projectDir.path], pipelineRunner: fake), 64);
     });
 

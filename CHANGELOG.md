@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.2.1 — 2026-09-28
+
+在 0.2.0 的基础上给常用汉字合一字体补上真粗体子集,并修复 E2E 交互回归脚本在新版
+基础库下的一处 RPC 兼容问题。
+
+### 合成加粗
+
+- **合一字体粗体**(`cjk_font_bold: level1 | full | false`,`--cjk-font-bold=...`,默认跟随 `cjk_font`,
+  必须与它同档):Noto Sans SC v37 Bold 子集(同一字表,OFL 1.1,入库),与常规合一字体同一 family、
+  字重 700 注册,w≥600 的中文(标题、价格)不再由 CanvasKit 合成加粗。起因:iOS 真机进商品详情页那一帧
+  200–400ms,layout 占大头(15 段、每段 10–16ms)。真实 CanvasKit(完整版 wasm)基准,30 个没出现过的
+  汉字、22px:JSC 关 JIT(近似 iOS 小程序)常规 7.3ms / 合成加粗 30.5ms / 真粗体 7.4ms;先用 w400
+  预热同一字符串再测 w700 仍是 30.5ms——开销在逐字形加粗轮廓,不在 shaping;字形缓存热了之后三者
+  都是 0.2ms。V8 JIT 下 0.32 / 1.05 / 0.27ms。粗体放独立分包 `pkg-cjkb`(full 约 1.17MB,level1 约
+  660KB br;与 full 常规合包会超 2048KB),boot 在 dart/wasm 分包请求之后才读;只要不晚于常规字体到
+  就随 FontManifest 一起注册(零额外等待、不发 fontsChange,模拟器实测引擎取用等待 0–1ms),晚到则
+  先 404、首帧照常,到了再经入口包装 `ui.loadFontFromList` 补注册(一次 fontsChange;模拟器该真实电商小程序首页
+  54 段重排 13ms,字形缓存是热的)。不同档会出豆腐块(同一 family 下 SkParagraph 按字重只选一个字体,
+  而引擎缺字检测按家族取并集),构建期直接报错。该真实电商小程序总包 +1.17MB
+- `--perf-hud`:长帧/间隔明细里的 `fakeBold=N`(本帧 build 的合成加粗段落数:字重 ≥600 而字体列表里
+  没有注册过粗体的家族),每秒行 `layout=…(fakeBold n)`;首帧前诊断行 `cjk-bold pkg/read/parse`、
+  `cjk-bold 随常规字体注册` / `未就绪,首帧不等(404)` / `补注册`
+- **实测**:该真实电商小程序 iOS 真机详情页首次打开的 layout 长帧从 102–243ms 降到 4–7ms
+  (典型值),冷启动耗时不受影响(约 3.9s,与 0.2.0 持平)
+
+### E2E
+
+- `tools/e2e/drive.js`:微信开发者工具基础库升级到 3.17.4 后,`Page.callMethod` 这条
+  自动化 RPC 本身坏了(`No context found for objectId`),导致 `accept-interact.js`/
+  `accept-wx.js` 偶发报错;绕开为改走始终正常的 `mp.evaluate()`(`App.callFunction`),
+  在 App Service 层用 `getCurrentPages()` 拿到当前页面真实实例后直接调用同名方法,
+  效果与框架原生派发等价;同时补充"句柄过期自动重取重试"的通用兜底,两者互不影响
+
 ## 0.2.0 — 2026-09-28
 
 在 0.1.0 的基础上补齐三类运行时缺口(随机数、路由切换崩溃、图片离屏解码)、修复两处

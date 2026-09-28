@@ -22,7 +22,7 @@ const { createNet, makeFetch } = require('./net.js');
  * [opts.manifest] 是构建期生成的加载表 `mp-manifest.js`:
  *   { subPackages: { 分包名: () => Promise }, deferredSubPackages: [分包名],
  *     loadDart: () => Promise, assets: { 原始路径: () => Promise<base64> },
- *     remoteFonts?, cjkFont? }
+ *     remoteFonts?, cjkFont?, cjkFontBold? }
  * 主包不能同步 require 分包 JS,所以 main.dart.js 与资源都经它 require.async。
  *
  * 注意:`./bom-shim.js`、`./canvaskit.js`(经 CanvasKitInit)的 require 下沉到
@@ -98,6 +98,8 @@ function boot(opts) {
   const cjkBytes = cjkSpec
     ? require('./cjk-font.js').preloadCjkFont(cjkSpec, { wx: wx, perfLog: perfLog })
     : null;
+  const boldSpec = cjkSpec && manifest.cjkFontBold && typeof manifest.cjkFontBold.load === 'function'
+    ? manifest.cjkFontBold : null;
 
   const allLoaders = manifest.subPackages || {};
   const deferredNames = (manifest.deferredSubPackages || []).filter(function (n) { return n in allLoaders; });
@@ -109,6 +111,11 @@ function boot(opts) {
   // 先发先到,资源包的下载/注入落在 CanvasKit 初始化与 Dart 分片执行期间
   const earlyLoaded = loadSubpackages(early, onStage);
   const lateLoaded = loadSubpackages(late, onStage);
+  // 合一字体粗体(cjk_font_bold):排在 dart/wasm/启动资源包请求之后再拉,不挤占
+  // 关键路径;首帧不等它,晚到就首帧后补注册(见 cjk-font.js createCjkBold)
+  const cjkBold = boldSpec
+    ? require('./cjk-font.js').createCjkBold(boldSpec, cjkBytes, { wx: wx, perfLog: perfLog })
+    : null;
   // 先挂一个空的 catch,免得启动资源包先失败时成为未处理的 rejection;
   // 真正的失败在下面 initializeEngine 之前被 await 出来,走同一条报错路径
   lateLoaded.catch(function () {});
@@ -132,17 +139,19 @@ function boot(opts) {
       } catch (e) { /* 去重失败只是退回每次解析,不影响启动 */ }
       // 字节一到就先解析合一字体(TTF 解析很快,不挡别的步骤);引擎随后对同一个
       // ArrayBuffer 的 MakeFreeTypeFaceFromData / registerFont 命中缓存
-      if (cjkBytes && memo) {
-        cjkBytes.then(function (bytes) {
+      const preparse = function (p, label) {
+        p.then(function (bytes) {
           if (!bytes) return;
           try {
             const t = Date.now();
             const tf = CK.Typeface.MakeTypefaceFromData(bytes.buffer);
             if (tf && typeof tf.delete === 'function') tf.delete();
-            if (perfLog) perfLog('[mp-perf] cjk-font parse ' + (Date.now() - t) + 'ms(预解析)');
+            if (perfLog) perfLog('[mp-perf] ' + label + ' parse ' + (Date.now() - t) + 'ms(预解析)');
           } catch (e) { /* 预解析失败不影响引擎自己解析 */ }
         });
-      }
+      };
+      if (cjkBytes && memo) preparse(cjkBytes, 'cjk-font');
+      if (cjkBold && memo) preparse(cjkBold.bytes, 'cjk-bold');
       // 首帧提交:包一次 Surface.prototype.flush,第一次调用时报阶段并立即
       // 还原(只报一次,不影响后续每帧真实的 flush 调用)。必须趁 CK 刚拿到、
       // 垫片/引擎都还没开始画之前包上,否则真机上首帧可能已经在这之前画完。
@@ -197,6 +206,13 @@ function boot(opts) {
             return bytes;
           });
         };
+      }
+      if (cjkBold) {
+        preloaded[boldSpec.key] = cjkBold.respond;
+        // 晚到的粗体经入口包装补注册(首帧之后 ui.loadFontFromList)
+        shim.window.__mpLateFonts = cjkBold.bridge;
+        shim.self.__mpLateFonts = cjkBold.bridge;
+        shim.cjkBold = { family: boldSpec.family, state: cjkBold.state };
       }
       const net = createNet({ wx: wx, assets: manifest.assets || {}, matchAsset: matchAsset, decodeParts: decodeParts,
         remoteFonts: manifest.remoteFonts || null, preloaded: preloaded });

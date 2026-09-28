@@ -9,7 +9,7 @@
 ## 引入方式
 
 尚未发布到 pub.dev。用 git 依赖引入本仓库(公开仓库,无需额外凭证;`ref`
-建议固定到一个发布 tag,例如 `v0.2.0`,而不是 `main`):
+建议固定到一个发布 tag,例如 `v0.2.1`,而不是 `main`):
 
 ```yaml
 dependencies:
@@ -17,7 +17,7 @@ dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter_native
-      ref: v0.2.0
+      ref: v0.2.1
 ```
 
 在 mp-flutter 仓库内部开发(monorepo 内的 `example/` 等)时,用相对路径的

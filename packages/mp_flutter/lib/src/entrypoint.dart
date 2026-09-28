@@ -82,6 +82,10 @@ String entrypointImportFor(String projectPath, String packageName, String target
 /// 自己 new 一个),会与这里冲突——见 I1,这种工程请用 `--no-safe-area` 关闭
 /// 本包装(退回直接构建 `--target` 指向的文件,不生成本包装)。
 ///
+/// 顺带(cjk_font_bold):首帧之后监听 `self.__mpLateFonts`(runtime/cjk-font.js
+/// createCjkBold),晚到的合一字体粗体经 `ui.loadFontFromList` 补注册——只有
+/// Dart 侧能让引擎注册字体并发 fontsChange。桥不存在(没带粗体)时什么也不做。
+///
 /// [targetImport] 是入口文件的 import URI(`package:` 形式或相对入口包装自身
 /// 的相对 import,见 [entrypointImportFor]);缺省(仅供单测直接调用本函数时
 /// 使用)按旧行为拼 `package:$packageName/main.dart`。
@@ -90,12 +94,14 @@ String buildEntrypointSource(String packageName, {String? targetImport}) => '''
 // ignore_for_file: type=lint
 import 'dart:js_interop';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import '${targetImport ?? 'package:$packageName/main.dart'}' as app;
 
 void main() {
   _MpBinding();
+  _listenLateFonts();
   final Function m = app.main;
   if (m is dynamic Function()) {
     m();
@@ -110,6 +116,27 @@ class _MpBinding extends WidgetsFlutterBinding {
   @override
   Widget wrapWithDefaultView(Widget rootWidget) =>
       super.wrapWithDefaultView(_MpSafeArea(child: rootWidget));
+}
+
+@JS('__mpLateFonts')
+external _LateFontsBridge? get _lateFonts;
+
+extension type _LateFontsBridge._(JSObject _) implements JSObject {
+  external void listen(JSFunction fn);
+}
+
+// 首帧画完之后才开始收:晚到的字体注册会发 fontsChange、整体重排一次,不能
+// 挤进首帧;首帧前就到的字体已经随 FontManifest 注册,不经这里
+void _listenLateFonts() {
+  final b = _lateFonts;
+  if (b == null) return;
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    Future<void>.delayed(Duration.zero, () {
+      b.listen(((JSUint8Array bytes, JSString family) {
+        ui.loadFontFromList(bytes.toDart, fontFamily: family.toDart);
+      }).toJS);
+    });
+  });
 }
 
 @JS('__mpSafeArea')

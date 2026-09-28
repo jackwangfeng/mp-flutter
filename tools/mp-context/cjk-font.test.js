@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
-const { preloadCjkFont } = require(path.resolve(__dirname, '../../packages/mp_flutter/runtime/cjk-font.js'));
+const { preloadCjkFont, createCjkBold } = require(path.resolve(__dirname, '../../packages/mp_flutter/runtime/cjk-font.js'));
 
 test('先拉分包再 readCompressedFile(br),字节拷进本 realm', async () => {
   const order = [];
@@ -39,4 +39,72 @@ test('M6:spec.load() 超时按读取失败处理——解出 null 并告警,不�
   assert.strictEqual(bytes, null);
   assert.strictEqual(warns.length, 1);
   assert.match(warns[0], /分包就位超时 5ms/);
+});
+
+// ── 粗体(cjk_font_bold)──
+function fakeWx(delays) {
+  return { getFileSystemManager: () => ({ readCompressedFile(o) {
+    const d = delays[o.filePath];
+    if (d == null) { setTimeout(() => o.fail({ errMsg: 'denied' }), 1); return; }
+    setTimeout(() => o.success({ data: new Uint8Array([o.filePath.length]).buffer }), d);
+  } }) };
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const BOLD = { key: 'assets/mp-cjk/NotoSansSC-Bold.ttf', family: 'MpNotoSansSC', file: '/pkg-cjkb/b.br', load: () => Promise.resolve() };
+
+test('粗体不晚于常规字体:随清单一起交给引擎(served),不走补注册', async () => {
+  const wx = fakeWx({ '/pkg-cjk/r.br': 20, '/pkg-cjkb/b.br': 1 });
+  const regular = preloadCjkFont({ file: '/pkg-cjk/r.br', load: () => Promise.resolve() }, { wx, warn: () => {} });
+  const lines = [];
+  const bold = createCjkBold(BOLD, regular, { wx, warn: () => {}, perfLog: (l) => lines.push(l) });
+  const got = await bold.respond();
+  assert.ok(got instanceof Uint8Array);
+  assert.strictEqual(bold.state.status, 'served');
+  let called = 0;
+  bold.bridge.listen(() => { called++; });
+  await sleep(5);
+  assert.strictEqual(called, 0);
+  assert.ok(lines.some((l) => /cjk-bold 随常规字体注册/.test(l)), lines.join('\n'));
+  assert.ok(lines.some((l) => /^\[mp-perf\] cjk-bold read /.test(l)), lines.join('\n'));
+});
+
+test('粗体晚于常规字体:先 404(首帧不等),到了再交给 listen(先 listen 后到 / 先到后 listen 都行)', async () => {
+  for (const listenFirst of [true, false]) {
+    const wx = fakeWx({ '/pkg-cjk/r.br': 1, '/pkg-cjkb/b.br': 30 });
+    const regular = preloadCjkFont({ file: '/pkg-cjk/r.br', load: () => Promise.resolve() }, { wx, warn: () => {} });
+    const bold = createCjkBold(BOLD, regular, { wx, warn: () => {} });
+    await regular;
+    assert.strictEqual(await bold.respond(), null);
+    assert.strictEqual(bold.state.status, 'late');
+    const calls = [];
+    const fn = (b, fam) => calls.push([b.length, fam]);
+    if (listenFirst) bold.bridge.listen(fn);
+    await sleep(40);
+    if (!listenFirst) { assert.strictEqual(calls.length, 0); bold.bridge.listen(fn); }
+    assert.deepStrictEqual(calls, [[1, 'MpNotoSansSC']]);
+    assert.strictEqual(bold.state.status, 'late-loaded');
+    bold.bridge.listen(fn);   // 只交一次
+    assert.strictEqual(calls.length, 1);
+  }
+});
+
+test('常规字体读取失败:粗体也不注册(家族里只剩粗体会让常规文字也用它);粗体读取失败按 404', async () => {
+  let wx = fakeWx({ '/pkg-cjkb/b.br': 1 });
+  let regular = preloadCjkFont({ file: '/pkg-cjk/r.br', load: () => Promise.resolve() }, { wx, warn: () => {} });
+  let bold = createCjkBold(BOLD, regular, { wx, warn: () => {} });
+  let calls = 0;
+  bold.bridge.listen(() => { calls++; });
+  assert.strictEqual(await bold.respond(), null);
+  assert.strictEqual(bold.state.status, 'skipped');
+  await sleep(5);
+  assert.strictEqual(calls, 0);
+
+  const warns = [];
+  wx = fakeWx({ '/pkg-cjk/r.br': 1 });
+  regular = preloadCjkFont({ file: '/pkg-cjk/r.br', load: () => Promise.resolve() }, { wx, warn: () => {} });
+  bold = createCjkBold(BOLD, regular, { wx, warn: (m) => warns.push(m) });
+  await sleep(10);
+  assert.strictEqual(await bold.respond(), null);
+  assert.strictEqual(bold.state.status, 'failed');
+  assert.match(warns[0], /粗体读取失败.*合成加粗/);
 });

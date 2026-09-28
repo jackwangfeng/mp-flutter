@@ -408,6 +408,62 @@ test('合一字体:boot 一开始就读(早于 CanvasKit),引擎取用时直接�
   }
 });
 
+test('合一字体粗体:排在 dart/wasm 分包请求之后读;不晚于常规就随清单应答,晚到则 404 + self.__mpLateFonts 补交', async () => {
+  for (const boldDelay of [1, 40]) {
+    const c = createMpContext();
+    c.stubModule(path.join(RT, 'canvaskit.js'), function () {});
+    const events = [];
+    const make = () => { const h = { clone: () => h, delete() {}, isDeleted: () => false }; return h; };
+    const CK = { Typeface: { MakeTypefaceFromData: make, MakeFreeTypeFaceFromData: make } };
+    c.stubModule(path.join(RT, 'canvaskit-loader.js'), {
+      loadCanvasKit: () => new Promise((r) => setTimeout(() => r(CK), 10)),
+      routeImageElements: require(path.join(RT, 'canvaskit-loader.js')).routeImageElements,
+    });
+    c.wx.getFileSystemManager = () => ({
+      readCompressedFile(o) {
+        const bold = o.filePath.indexOf('cjkb') >= 0;
+        setTimeout(() => o.success({ data: new Uint8Array(bold ? [7, 7] : [1]).buffer }), bold ? boldDelay : 1);
+      },
+    });
+    const { boot } = c.requireModule(path.join(RT, 'boot.js'));
+    const statuses = {};
+    const lines = [];
+    const manifest = {
+      subPackages: { 'pkg-dart-0': () => { events.push('load pkg-dart-0'); return Promise.resolve(); } }, assets: {},
+      cjkFont: { key: 'assets/mp-cjk/NotoSansSC.ttf', family: 'MpNotoSansSC', file: '/pkg-cjk/mp-cjk.ttf.br',
+        load: () => { events.push('load pkg-cjk'); return Promise.resolve(); } },
+      cjkFontBold: { key: 'assets/mp-cjk/NotoSansSC-Bold.ttf', family: 'MpNotoSansSC', file: '/pkg-cjkb/mp-cjk-bold.ttf.br',
+        load: () => { events.push('load pkg-cjkb'); return Promise.resolve(); } },
+      loadDart: () => {
+        const self = c.requireModule(path.join(RT, 'bom-shim.js')).self;
+        return Promise.all(['assets/mp-cjk/NotoSansSC.ttf', 'assets/mp-cjk/NotoSansSC-Bold.ttf'].map((k) =>
+          self.fetch(k).then((r) => { statuses[k.endsWith('Bold.ttf') ? 'Bold.ttf' : 'SC.ttf'] = r.status; }))).then(() => {
+          self._flutter.loader.didCreateEngineInitializer({
+            initializeEngine() { return Promise.resolve({ runApp() { return Promise.resolve(); } }); },
+          });
+        });
+      },
+    };
+    const r = await boot({ canvas: c.canvas, manifest, cssWidth: 390, cssHeight: 844, perfLog: (l) => lines.push(l) });
+    assert.deepStrictEqual(events, ['load pkg-cjk', 'load pkg-dart-0', 'load pkg-cjkb']);
+    const bridge = r.shim.self.__mpLateFonts;
+    assert.ok(bridge && typeof bridge.listen === 'function');
+    assert.strictEqual(r.shim.cjkBold.family, 'MpNotoSansSC');
+    const got = [];
+    bridge.listen((b, fam) => got.push([Array.from(b), fam]));
+    await new Promise((res) => setTimeout(res, 60));
+    if (boldDelay === 1) {
+      assert.deepStrictEqual(statuses, { 'SC.ttf': 200, 'Bold.ttf': 200 });
+      assert.strictEqual(r.shim.cjkBold.state.status, 'served');
+      assert.deepStrictEqual(got, []);
+    } else {
+      assert.deepStrictEqual(statuses, { 'SC.ttf': 200, 'Bold.ttf': 404 });
+      assert.deepStrictEqual(got, [[[7, 7], 'MpNotoSansSC']]);
+      assert.strictEqual(r.shim.cjkBold.state.status, 'late-loaded');
+    }
+  }
+});
+
 test('合一字体读取失败:引擎拿到 404,照常启动', async () => {
   const c = createMpContext();
   c.stubModule(path.join(RT, 'canvaskit.js'), function () {});

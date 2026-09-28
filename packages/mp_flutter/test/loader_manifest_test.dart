@@ -147,15 +147,22 @@ run(false).then((a) => run(true).then((b) => console.log(a + ' ' + b)));
     expect(src, isNot(contains('remoteFonts')));
   });
 
-  test('deferredSubPackages(启动资源包)与 cjkFont 只在给了时出现', () {
+  test('deferredSubPackages(启动资源包)与 cjkFont / cjkFontBold 只在给了时出现', () {
     final s = buildLoaderManifest(dartModulePaths: ['pkg-dart-0/dart.js'], subPackages: ['pkg-dart-0', 'pkg-assets-boot'],
         assets: buildAssetBundle({}), deferredSubPackages: ['pkg-assets-boot'],
-        cjkFont: (asset: 'assets/mp-cjk/F.ttf', package: 'pkg-cjk', file: 'f.ttf.br'));
+        cjkFont: (asset: 'assets/mp-cjk/F.ttf', package: 'pkg-cjk', file: 'f.ttf.br'),
+        cjkFontBold: (asset: 'assets/mp-cjk/B.ttf', package: 'pkg-cjkb', file: 'b.ttf.br'));
     expect(s, contains('deferredSubPackages: ["pkg-assets-boot"],'));
-    expect(s, contains('cjkFont: {\n    key: "assets/mp-cjk/F.ttf",\n    file: "/pkg-cjk/f.ttf.br",\n'
+    expect(s, contains('cjkFont: {\n    key: "assets/mp-cjk/F.ttf",\n    family: "MpNotoSansSC",\n    file: "/pkg-cjk/f.ttf.br",\n'
         '    load: function () { return require.async("./pkg-cjk/mp-ready.js"); },\n  },'));
+    expect(s, contains('cjkFontBold: {\n    key: "assets/mp-cjk/B.ttf",\n    family: "MpNotoSansSC",\n    file: "/pkg-cjkb/b.ttf.br",\n'
+        '    load: function () { return require.async("./pkg-cjkb/mp-ready.js"); },\n  },'));
     expect(src, isNot(contains('deferredSubPackages')));
     expect(src, isNot(contains('cjkFont')));
+    // 没有常规合一字体时粗体无从挂靠,不出现
+    final noRegular = buildLoaderManifest(dartModulePaths: ['pkg-dart-0/dart.js'], subPackages: const [],
+        assets: buildAssetBundle({}), cjkFontBold: (asset: 'assets/mp-cjk/B.ttf', package: 'pkg-cjkb', file: 'b.ttf.br'));
+    expect(noRegular, isNot(contains('cjkFontBold')));
   });
 
   test('加载表整体是合法 JS(node --check)', () async {

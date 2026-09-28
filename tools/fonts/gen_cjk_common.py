@@ -2,8 +2,10 @@
 """生成 mp-flutter 随包分发的"常用汉字合一字体"。
 
 产物(已入库,用户构建时不需要 Python):
-  packages/mp_flutter/fonts/NotoSansSC-GB2312-L1.ttf   level1:GB2312 一级(默认)
-  packages/mp_flutter/fonts/NotoSansSC-GB2312.ttf      full:一级 + 二级
+  packages/mp_flutter/fonts/NotoSansSC-GB2312-L1.ttf        level1:GB2312 一级
+  packages/mp_flutter/fonts/NotoSansSC-GB2312.ttf           full:一级 + 二级(默认)
+  packages/mp_flutter/fonts/NotoSansSC-Bold-GB2312-L1.ttf   粗体 level1(cjk_font_bold,同一字表)
+  packages/mp_flutter/fonts/NotoSansSC-Bold-GB2312.ttf      粗体 full
 只有想重新生成(换字符集、换源字体版本)时才跑本脚本:
 
     pip install fonttools==4.62.1
@@ -11,8 +13,15 @@
 
 来源:Google Fonts 的 Noto Sans SC v37 Regular 完整 TTF(与 Flutter 3.41.9 引擎回退表里
 notosanssc/v37 分片同一版本,字形逐点一致;SIL Open Font License 1.1,许可证全文见
-packages/mp_flutter/fonts/OFL.txt,另见仓库 NOTICE)。
+packages/mp_flutter/fonts/OFL.txt,另见仓库 NOTICE)。粗体来自同一版本的 Noto Sans SC v37
+Bold 完整 TTF(usWeightClass 700,同为 OFL 1.1)。
 下载后按 SHA-256 校验,版本不对直接失败。
+
+为什么要粗体(cjk_font_bold):字重 ≥600 的文字(标题、价格)落在只有常规字重的字体上时,
+SkParagraph 会合成加粗(SkFont embolden),每个字形第一次出现都要逐点加粗轮廓;
+真实 CanvasKit 实测 30 字 22px 段落首次排版,JSC 无 JIT 时合成加粗 30.5ms、真粗体 7.4ms
+(常规 7.3ms)。粗体子集必须与常规子集同一字表:同一 family 下 SkParagraph 按字重只选一个
+字体,粗体缺的字会画成豆腐块,而引擎缺字检测把同 family 的所有字体取并集,不会去拉回退分片。
 
 字符集:
   · GB2312 一级汉字 3755(level1);full 再加二级汉字 3008(如 昵/浏/渲);
@@ -40,18 +49,26 @@ import urllib.request
 from fontTools import subset
 from fontTools.ttLib import TTFont
 
-SRC_URL = 'https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYxNavzT.ttf'
-SRC_SHA256 = '2556422841d76fd6dbb9461d16ca48fd75c6961bdfa9d73682b367c36abf7084'
+# 字重 → (来源 URL, SHA-256, 本地缓存文件名)
+SOURCES = {
+    'regular': ('https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYxNavzT.ttf',
+                '2556422841d76fd6dbb9461d16ca48fd75c6961bdfa9d73682b367c36abf7084',
+                'NotoSansSC-v37-full.ttf'),
+    'bold': ('https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaGzjCnYxNavzT.ttf',
+             'a43242df929f67a8fad9ee407761f94ae6a9d003d5e20d4f2367dcb519913c72',
+             'NotoSansSC-v37-Bold-full.ttf'),
+}
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 FONT_DIR = os.path.join(ROOT, 'packages', 'mp_flutter', 'fonts')
-# 两档:level1 = GB2312 一级 3755 字(默认);full = 一级 + 二级 6763 字
+# 两档:level1 = GB2312 一级 3755 字;full = 一级 + 二级 6763 字(默认)。(字重, 档) → 产物
 OUTS = {
-    'level1': os.path.join(FONT_DIR, 'NotoSansSC-GB2312-L1.ttf'),
-    'full': os.path.join(FONT_DIR, 'NotoSansSC-GB2312.ttf'),
+    ('regular', 'level1'): os.path.join(FONT_DIR, 'NotoSansSC-GB2312-L1.ttf'),
+    ('regular', 'full'): os.path.join(FONT_DIR, 'NotoSansSC-GB2312.ttf'),
+    ('bold', 'level1'): os.path.join(FONT_DIR, 'NotoSansSC-Bold-GB2312-L1.ttf'),
+    ('bold', 'full'): os.path.join(FONT_DIR, 'NotoSansSC-Bold-GB2312.ttf'),
 }
-CACHE = os.path.join(os.path.expanduser(os.environ.get('XDG_CACHE_HOME', '~/.cache')),
-                     'mp_flutter', 'fonts', 'NotoSansSC-v37-full.ttf')
+CACHE_DIR = os.path.join(os.path.expanduser(os.environ.get('XDG_CACHE_HOME', '~/.cache')), 'mp_flutter', 'fonts')
 
 
 def gb2312_rows(rows):
@@ -83,24 +100,26 @@ def charset(level):
     return sorted(ord(c) for c in chars)
 
 
-def source_font():
-    if not os.path.exists(CACHE):
-        os.makedirs(os.path.dirname(CACHE), exist_ok=True)
-        print('下载 ' + SRC_URL)
-        with urllib.request.urlopen(SRC_URL, timeout=120) as r:
+def source_font(weight):
+    url, sha, name = SOURCES[weight]
+    cache = os.path.join(CACHE_DIR, name)
+    if not os.path.exists(cache):
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        print('下载 ' + url)
+        with urllib.request.urlopen(url, timeout=120) as r:
             data = r.read()
-        tmp = CACHE + '.part'
+        tmp = cache + '.part'
         with open(tmp, 'wb') as f:
             f.write(data)
-        os.replace(tmp, CACHE)
-    data = open(CACHE, 'rb').read()
+        os.replace(tmp, cache)
+    data = open(cache, 'rb').read()
     digest = hashlib.sha256(data).hexdigest()
-    if digest != SRC_SHA256:
-        sys.exit('源字体 SHA-256 不符(%s),删除 %s 后重试;若上游换了文件请核对版本后更新 SRC_SHA256' % (digest, CACHE))
-    return CACHE
+    if digest != sha:
+        sys.exit('源字体 SHA-256 不符(%s),删除 %s 后重试;若上游换了文件请核对版本后更新 SOURCES' % (digest, cache))
+    return cache
 
 
-def build(src, level, out):
+def build(src, level, out, label=None):
     cps = charset(level)
     opts = subset.Options()
     opts.hinting = False
@@ -123,14 +142,13 @@ def build(src, level, out):
     os.makedirs(os.path.dirname(out), exist_ok=True)
     font.save(out)
     data = open(out, 'rb').read()
-    print('%-6s %s  %d 字节  %d 个码点  sha256=%s' % (level, out, len(data), len(font.getBestCmap()),
+    print('%-12s %s  %d 字节  %d 个码点  sha256=%s' % (label or level, out, len(data), len(font.getBestCmap()),
                                                  hashlib.sha256(data).hexdigest()))
 
 
 def main():
-    src = source_font()
-    for level, out in OUTS.items():
-        build(src, level, out)
+    for (weight, level), out in OUTS.items():
+        build(source_font(weight), level, out, label=weight + ' ' + level)
 
 
 if __name__ == '__main__':

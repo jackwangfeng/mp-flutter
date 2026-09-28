@@ -36,6 +36,14 @@ void main() {
     expect(src, contains('data.copyWith(viewPadding: vp, padding: pad)'));
   });
 
+  test('入口包装:首帧之后才 listen self.__mpLateFonts,晚到的粗体经 ui.loadFontFromList 补注册', () {
+    final src = buildEntrypointSource('x');
+    expect(src, contains("@JS('__mpLateFonts')"));
+    expect(src.indexOf('_listenLateFonts();'), lessThan(src.indexOf('m();')));
+    expect(src, contains('addPostFrameCallback'));
+    expect(src, contains('ui.loadFontFromList(bytes.toDart, fontFamily: family.toDart)'));
+  });
+
   test('没有 lib/main.dart:跳过(不致命)', () {
     project(mainDart: false);
     expect(() => writeEntrypoint(tmp.path), throwsA(isA<EntrypointSkipped>()));

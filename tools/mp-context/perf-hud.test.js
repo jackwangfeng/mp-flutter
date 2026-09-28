@@ -6,7 +6,7 @@ const path = require('path');
 // perf-hud.js 不碰任何小程序专属全局(wx/window/self),纯函数式包装逻辑,
 // 直接 require 即可单测,不需要 createMpContext 的 vm 沙箱。
 const RT = path.resolve(__dirname, '../../packages/mp_flutter/runtime');
-const { createBootTimer, createPerfHud, glMethodNames } = require(path.join(RT, 'perf-hud.js'));
+const { createBootTimer, createPerfHud, glMethodNames, sfntWeight } = require(path.join(RT, 'perf-hud.js'));
 
 /** 可控时钟:调用方手动推进 nowValue 模拟耗时。 */
 function makeClock(start = 0) {
@@ -497,5 +497,65 @@ test('字体集重建计为 fontChange(累计),每秒行报解析去重的复用
   r = hud.report();
   assert.strictEqual(r.fontChangeCount, 2);
   assert.strictEqual(r.fontReuse, 0);
+  hud.stop();
+});
+
+/** 最小 sfnt:表目录只有 OS/2 一项,usWeightClass = [w]。 */
+function sfnt(w) {
+  const b = new Uint8Array(12 + 16 + 8);
+  b.set([0, 1, 0, 0, 0, 1]);
+  b.set([0x4F, 0x53, 0x2F, 0x32], 12);          // 'OS/2'
+  b.set([0, 0, 0, 28], 12 + 8);                 // offset
+  b[28 + 4] = w >> 8; b[28 + 5] = w & 255;
+  return b;
+}
+
+test('sfntWeight:读 TTF/OTF 的 OS/2 字重;woff2/垃圾数据返回 0', () => {
+  assert.strictEqual(sfntWeight(sfnt(700)), 700);
+  assert.strictEqual(sfntWeight(sfnt(400).buffer), 400);
+  assert.strictEqual(sfntWeight(new Uint8Array([0x77, 0x4F, 0x46, 0x32, 0, 0, 0, 0, 0, 0, 0, 0])), 0);
+  assert.strictEqual(sfntWeight(new Uint8Array(3)), 0);
+  assert.strictEqual(sfntWeight(null), 0);
+});
+
+test('合成加粗计数:w≥600 且字体列表里没有注册过粗体的家族 → 长帧明细 fakeBold=N;粗体注册后不再计', async () => {
+  const clock = makeClock();
+  const canvas = makeFakeCanvas();
+  function Provider() {}
+  Provider.prototype.registerFont = function () {};
+  function Builder() {}
+  Builder.prototype.build = function () { clock.advance(30); return {}; };
+  Builder.prototype.pushStyle = function () {};
+  Builder.prototype.pushPaintStyle = function () {};
+  Builder.MakeFromFontCollection = () => new Builder();
+  const CK = { TypefaceFontProvider: Provider, ParagraphBuilder: Builder };
+  const logs = [];
+  const manifest = [{ family: 'App', fonts: [{ asset: 'a.ttf' }, { asset: 'b.ttf', weight: 700 }] },
+    { family: 'MpNotoSansSC', fonts: [{ asset: 'r.ttf' }, { asset: 'bold.ttf', weight: 700 }] }];
+  const cjkBold = { family: 'MpNotoSansSC', state: { status: 'late' } };
+  const hud = createPerfHud({ canvas, gl: null, CK, setData: () => {}, now: clock.now, log: (m) => logs.push(m),
+    fontInfo: { cjkBold, fetch: () => Promise.resolve({ json: () => Promise.resolve(manifest) }) } });
+  await new Promise((r) => setTimeout(r, 0));
+  const para = (w, fams, push) => {
+    const b = Builder.MakeFromFontCollection({ textStyle: { fontFamilies: ['Roboto'], fontStyle: { weight: { value: 400 } } } });
+    if (push) b.pushPaintStyle({ fontFamilies: fams, fontStyle: { weight: { value: w } } }, null, null);
+    else b.pushStyle({ fontFamilies: fams, fontStyle: { weight: { value: w } } });
+    b.build();
+  };
+  canvas.requestAnimationFrame(() => {
+    para(700, ['Roboto', 'MpNotoSansSC'], false);    // 计:MpNotoSansSC 粗体没注册上(晚到)
+    para(600, ['X', 'MpNotoSansSC'], true);          // 计
+    para(500, ['MpNotoSansSC'], false);              // 不计:w500 不合成
+    para(700, ['App', 'MpNotoSansSC'], false);       // 不计:业务字体清单声明了 700
+  });
+  canvas.fire(16);
+  assert.strictEqual(hud.report().fakeBoldCount, 2);
+  assert.ok(logs.some((l) => /long-frame 120\.0ms layout=120\.0 fakeBold=2 /.test(l)), logs.join('\n'));
+  assert.ok(logs.some((l) => /layout=4\/120\.0\(fakeBold 2\)/.test(l)), logs.join('\n'));
+  // 粗体补注册:引擎重建字体集时 registerFont 带上字重 700 的字节
+  new Provider().registerFont(sfnt(700), 'MpNotoSansSC');
+  canvas.requestAnimationFrame(() => { para(700, ['Roboto', 'MpNotoSansSC'], false); clock.advance(40); });
+  canvas.fire(48);
+  assert.strictEqual(hud.report().fakeBoldCount, 0);
   hud.stop();
 });

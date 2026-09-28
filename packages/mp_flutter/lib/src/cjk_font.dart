@@ -46,9 +46,70 @@ const kCjkFontPackage = 'pkg-cjk';
 /// 分包里的文件(相对分包 root)。
 const kCjkFontFile = 'mp-cjk.ttf.br';
 
-/// 读入库的合一字体。[level] 是 `level1` / `full`。
-List<int> readCjkFont(String packageRoot, {String level = 'level1'}) {
-  final rel = kCjkFontSources[level];
+/// 合一字体的粗体(`cjk_font_bold`,默认与 `cjk_font` 同档)。
+///
+/// 为什么要它:标题、价格常用 FontWeight.w600 以上,而合一字体与回退分片都只有
+/// 常规字重。SkParagraph 发现所选字体比请求的字重轻(请求 ≥600、字体 <600)
+/// 就合成加粗(SkFont embolden),每个字形第一次出现都要把轮廓逐点加粗、重算
+/// 边界。真实 CanvasKit 实测(30 个没出现过的汉字、22px、JSC 关 JIT):常规
+/// 7.3ms、合成加粗 30.5ms、真粗体 7.4ms——合成加粗是真粗体的 4 倍,iOS 真机
+/// 进详情页那一帧的长 layout 主要就是它。
+///
+/// 以同一 family([kCjkFontFamily])注册:引擎把清单里同一家族的字体都
+/// registerFont 到这个名字下,TypefaceFontProvider 按字重挑最接近的那个,
+/// w≥600 的文字自然落到真粗体上;回退字体表里仍只有这一个 family 名。
+///
+/// **必须与常规字体同一字表**([resolveCjkBoldLevel]):同一 family 下 SkParagraph
+/// 按字重只挑一个字体排版,粗体缺的字直接画成豆腐块(不会退回同家族的常规
+/// 字体);而引擎缺字检测(getMissingCodePoints)把同家族所有字体的覆盖取并集,
+/// 认为"有字"就不会去拉回退分片。反过来粗体比常规多字也一样,常规文字会缺。
+const kCjkFontBoldSources = {
+  'level1': 'fonts/NotoSansSC-Bold-GB2312-L1.ttf',
+  'full': 'fonts/NotoSansSC-Bold-GB2312.ttf',
+};
+
+/// 粗体在 FontManifest 里声明的资源路径(相对 `assets/`)。
+const kCjkFontBoldAssetRel = 'mp-cjk/NotoSansSC-Bold.ttf';
+
+/// 粗体资源 key。
+const kCjkFontBoldAsset = 'assets/$kCjkFontBoldAssetRel';
+
+/// 粗体所在分包。不与 pkg-cjk 合包:full 常规(约 1146KB)+ full 粗体(约
+/// 1170KB)超过单分包 2048KB 上限;单独成包也让它不挤占常规字体的下载。
+const kCjkFontBoldPackage = 'pkg-cjkb';
+
+/// 粗体分包里的文件(相对分包 root)。
+const kCjkFontBoldFile = 'mp-cjk-bold.ttf.br';
+
+/// 算出生效的粗体档位(null = 不带粗体)。
+///
+/// [regular] 是生效的 `cjk_font`(null = 关闭);[setting] 是 `cjk_font_bold`
+/// 的配置值:null(未配置,跟随 [regular])/ `level1` / `full` / `false`。
+/// 常规字体关闭时粗体无从挂靠(家族里只剩粗体,常规文字也会用它),显式要粗体
+/// 就报错,未配置则不带。两档不一致抛 [ArgumentError](原因见 [kCjkFontBoldSources])。
+String? resolveCjkBoldLevel(String? regular, String? setting) {
+  if (setting == 'false') return null;
+  if (setting != null && !kCjkFontBoldSources.containsKey(setting)) {
+    throw ArgumentError.value(setting, 'cjkFontBold', '只能是 ${kCjkFontBoldSources.keys.join(' / ')} / false');
+  }
+  if (regular == null) {
+    if (setting != null) {
+      throw ArgumentError('cjk_font_bold: $setting 需要常规合一字体,但 cjk_font 已关闭。');
+    }
+    return null;
+  }
+  if (setting == null) return regular;
+  if (setting != regular) {
+    throw ArgumentError('cjk_font_bold: $setting 与 cjk_font: $regular 不一致。粗体与常规合一字体必须同一字表:'
+        '同一 family 下 SkParagraph 按字重只选一个字体,少掉的字会画成豆腐块。'
+        '把 cjk_font_bold 设成 $regular,或设 false 不带粗体。');
+  }
+  return setting;
+}
+
+/// 读入库的合一字体。[level] 是 `level1` / `full`;[bold] 读粗体。
+List<int> readCjkFont(String packageRoot, {String level = 'level1', bool bold = false}) {
+  final rel = (bold ? kCjkFontBoldSources : kCjkFontSources)[level];
   if (rel == null) throw ArgumentError.value(level, 'level', '只能是 ${kCjkFontSources.keys.join(' / ')}');
   final f = File(p.join(packageRoot, rel));
   if (!f.existsSync()) {
@@ -63,7 +124,10 @@ List<int> readCjkFont(String packageRoot, {String level = 'level1'}) {
 /// 清单缺失或为空时新建;解析失败抛 [FormatException](不能静默跳过:
 /// 跳过后 main.dart.js 补丁仍会把 [kCjkFontFamily] 当回退字体,但家族没注册,
 /// 缺字检测拿不到它,等于白打补丁)。已声明同名家族时原样返回。
-List<int> addCjkFontToManifest(List<int>? manifestBytes) {
+///
+/// [bold]:同一家族里再声明粗体(`weight: 700`;CanvasKit 渲染器不看这个描述,
+/// 按字体文件自身的 OS/2 字重匹配,写上是给人和 --perf-hud 看的)。
+List<int> addCjkFontToManifest(List<int>? manifestBytes, {bool bold = false}) {
   List<dynamic> doc;
   if (manifestBytes == null || manifestBytes.isEmpty) {
     doc = [];
@@ -80,6 +144,7 @@ List<int> addCjkFontToManifest(List<int>? manifestBytes) {
       'family': kCjkFontFamily,
       'fonts': [
         {'asset': kCjkFontAssetRel},
+        if (bold) {'asset': kCjkFontBoldAssetRel, 'weight': 700},
       ],
     });
   }

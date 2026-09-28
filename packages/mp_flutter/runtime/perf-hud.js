@@ -95,11 +95,13 @@ const CATS = ['decode', 'native', 'scale2d', 'upload', 'shader', 'fontParse', 'l
 function emptyAcc() {
   const a = {};
   CATS.forEach(function (k) { a[k] = 0; });
+  a.fakeBold = 0;   // 计数(不是耗时):本帧 build 的合成加粗段落数,见 wrapFakeBold
   return a;
 }
 function accText(acc) {
   return CATS.filter(function (k) { return acc[k] >= 0.05; })
-    .map(function (k) { return k + '=' + acc[k].toFixed(1); }).join(' ');
+    .map(function (k) { return k + '=' + acc[k].toFixed(1); }).join(' ') +
+    (acc.fakeBold ? ' fakeBold=' + acc.fakeBold : '');
 }
 
 /**
@@ -237,6 +239,117 @@ function wrapText(CK, state, now, log, add) {
   if (CK.Paragraph && CK.Paragraph.prototype) timeMethod(CK.Paragraph.prototype, 'layout', now, layout('Paragraph.layout'));
 }
 
+/**
+ * sfnt(TTF/OTF)字节里 OS/2 表的 usWeightClass;不是 sfnt(woff/woff2 表数据
+ * 是压缩的)或读不到时返回 0。只读表目录,开销是几十次字节读。
+ */
+function sfntWeight(data) {
+  try {
+    let u8 = null;
+    if (Object.prototype.toString.call(data) === '[object ArrayBuffer]') u8 = new Uint8Array(data);
+    else if (data && data.buffer && typeof data.byteOffset === 'number') u8 = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    if (!u8 || u8.length < 12) return 0;
+    const u32 = function (o) { return ((u8[o] << 24) >>> 0) + (u8[o + 1] << 16) + (u8[o + 2] << 8) + u8[o + 3]; };
+    const tag = u32(0);
+    if (tag !== 0x00010000 && tag !== 0x4F54544F && tag !== 0x74727565) return 0;   // \0\1\0\0 / OTTO / true
+    const n = (u8[4] << 8) | u8[5];
+    for (let i = 0; i < n; i++) {
+      const rec = 12 + i * 16;
+      if (rec + 16 > u8.length) return 0;
+      if (u32(rec) === 0x4F532F32) {   // 'OS/2'
+        const off = u32(rec + 8);
+        return off + 6 <= u8.length ? ((u8[off + 4] << 8) | u8[off + 5]) : 0;
+      }
+    }
+  } catch (e) { /* 读不到按未知 */ }
+  return 0;
+}
+
+/**
+ * 合成加粗计数(cjk_font_bold 的诊断):段落里有字重 ≥600 的样式、而它的
+ * fontFamilies 里没有一个家族注册过 ≥600 的字体时,SkParagraph 只能合成加粗
+ * (SkFont embolden,每个字形首次出现都要逐点加粗轮廓,见 cjk_font.dart)。
+ * 长帧/间隔明细里记作 `fakeBold=N`(本帧 build 的这类段落数)。
+ *
+ * 哪些家族有粗体:
+ *   · TypefaceFontProvider.registerFont 时读字体 OS/2 字重(只认 TTF/OTF;
+ *     引擎回退分片是 woff2,读不到,它们本来也都是常规字重)——引擎每次重建
+ *     字体集(回退字体到达、loadFontFromList)都会把全部字体重新注册一遍;
+ *   · 首帧前那次注册发生在本 HUD 装上之前,补两条来源:合一字体粗体看 boot
+ *     的实际结果([fontInfo.cjkBold],随清单注册成功才算);业务字体看
+ *     FontManifest.json 里声明的 weight(pubspec 里写了 weight: 700 才有)。
+ * 近似:按"段落字体列表里任一家族有粗体"判断,不追到具体字符落在哪个家族
+ * (合一字体排在所有回退分片之前,中文基本都落在它上面)。
+ */
+function wrapFakeBold(CK, state, fontInfo) {
+  const PB = CK.ParagraphBuilder;
+  if (!PB || !PB.prototype || typeof WeakMap !== 'function') return false;
+  const bold = state.boldFamilies;
+  const info = fontInfo || {};
+  const cjk = info.cjkBold;
+  if (cjk && cjk.state && (cjk.state.status === 'served' || cjk.state.status === 'late-loaded')) bold[cjk.family] = true;
+  if (typeof info.fetch === 'function') {
+    try {
+      Promise.resolve(info.fetch('assets/FontManifest.json')).then(function (r) { return r && r.json ? r.json() : null; }).then(function (doc) {
+        (Array.isArray(doc) ? doc : []).forEach(function (f) {
+          if (!f || typeof f.family !== 'string' || (cjk && f.family === cjk.family)) return;
+          (f.fonts || []).forEach(function (a) { if (a && +a.weight >= 600) bold[f.family] = true; });
+        });
+      }).then(null, function () { /* 读不到清单只是少一条来源 */ });
+    } catch (e) { /* 同上 */ }
+  }
+  if (CK.TypefaceFontProvider && CK.TypefaceFontProvider.prototype) {
+    const proto = CK.TypefaceFontProvider.prototype;
+    const origReg = proto.registerFont;
+    if (typeof origReg === 'function') {
+      proto.registerFont = function (data, family) {
+        if (typeof family === 'string' && !bold[family] && sfntWeight(data) >= 600) bold[family] = true;
+        return origReg.apply(this, arguments);
+      };
+    }
+  }
+  const meta = new WeakMap();
+  const note = function (b, ts) {
+    if (!b || !ts) return;
+    let m = meta.get(b);
+    if (!m) { m = { w: 0, fams: [] }; meta.set(b, m); }
+    const w = ts.fontStyle && ts.fontStyle.weight;
+    const v = w == null ? 0 : (typeof w === 'number' ? w : +w.value);
+    if (v > m.w) m.w = v;
+    const fams = ts.fontFamilies;
+    if (fams && fams.length) for (let i = 0; i < fams.length; i++) if (m.fams.indexOf(fams[i]) < 0) m.fams.push(fams[i]);
+  };
+  ['MakeFromFontCollection', 'MakeFromFontProvider', 'Make'].forEach(function (name) {
+    const orig = PB[name];
+    if (typeof orig !== 'function') return;
+    PB[name] = function (style) {
+      const b = orig.apply(this, arguments);
+      try { note(b, style && style.textStyle); } catch (e) { /* 忽略 */ }
+      return b;
+    };
+  });
+  ['pushStyle', 'pushPaintStyle'].forEach(function (name) {
+    const orig = PB.prototype[name];
+    if (typeof orig !== 'function') return;
+    PB.prototype[name] = function (ts) {
+      try { note(this, ts); } catch (e) { /* 忽略 */ }
+      return orig.apply(this, arguments);
+    };
+  });
+  const origBuild = PB.prototype.build;
+  if (typeof origBuild === 'function') {
+    PB.prototype.build = function () {
+      const m = meta.get(this);
+      if (m && m.w >= 600 && !m.fams.some(function (f) { return bold[f]; })) {
+        state.acc.fakeBold++;
+        state.fakeBoldCount++;
+      }
+      return origBuild.apply(this, arguments);
+    };
+  }
+  return true;
+}
+
 const FONT_URL = /\.(ttf|otf|woff2?)(\?|#|$)|mp-fonts\//i;
 
 /** 包一层 host.fetch:字体 URL 记录从发起到拿到响应的等待时间(不占主线程,单独列出)。 */
@@ -333,6 +446,7 @@ function wrapCanvasRaf(canvas, state, now, log) {
 
 function addAcc(a, b) {
   CATS.forEach(function (k) { a[k] += b[k]; });
+  a.fakeBold += b.fakeBold;
   return a;
 }
 
@@ -368,6 +482,8 @@ function finishFrame(state, log) {
  *   - images:bom-shim 的图片模块(原生解码统计,setStatsSink)
  *   - fetchHosts:[window, self](字体 fetch 等待计时)
  *   - typefaceMemo:boot 装的字体解析去重(typeface-memo.js),每秒行里报复用次数
+ *   - fontInfo:{ cjkBold: shim.cjkBold, fetch }——合成加粗计数用的"哪些家族有
+ *     粗体"首帧前来源(见 wrapFakeBold)
  *   - setData(patch):驱动左上角浮层(`data.mpPerf`)
  *   - now/log/setIntervalFn/clearIntervalFn:仅供单测注入
  */
@@ -410,6 +526,7 @@ function createPerfHud(opts) {
     layoutCount: 0, layoutMs: 0,
     fontFetchCount: 0, fontFetchMs: 0, fontFetchPending: 0,
     fontChangeCount: 0, memoHitsSeen: 0,
+    fakeBoldCount: 0, boldFamilies: {},
   };
   function add(cat, ms) {
     state.acc[cat] += ms;
@@ -430,6 +547,7 @@ function createPerfHud(opts) {
   }
   if (CK) wrapDecode(CK, state, now, log, add);
   if (CK) { try { wrapText(CK, state, now, log, add); } catch (e) { /* 文字计时失败不影响其余 */ } }
+  if (CK) { try { wrapFakeBold(CK, state, opts.fontInfo); } catch (e) { /* 同上 */ } }
   wrapFontFetch(opts.fetchHosts, state, now, log);
   if (opts.images && typeof opts.images.setStatsSink === 'function') {
     opts.images.setStatsSink(function (e) {
@@ -497,6 +615,7 @@ function createPerfHud(opts) {
       layoutCount: state.layoutCount, layoutMs: state.layoutMs,
       blockedMs: state.blockedMs, blockedMax: state.blockedMax,
       fontChangeCount: state.fontChangeCount, fontReuse: 0,
+      fakeBoldCount: state.fakeBoldCount,
     };
     const memo = opts.typefaceMemo;
     if (memo && memo.stats) {
@@ -517,6 +636,7 @@ function createPerfHud(opts) {
         ' font(fetch,parse)=' + r.fontFetchCount + '/' + r.fontFetchMs.toFixed(0) + ',' + r.fontParseCount + '/' + r.fontParseMs.toFixed(1) +
         (r.fontReuse ? '(reuse ' + r.fontReuse + ')' : '') + ' fontChange=' + r.fontChangeCount +
         ' layout=' + r.layoutCount + '/' + r.layoutMs.toFixed(1) +
+        (r.fakeBoldCount ? '(fakeBold ' + r.fakeBoldCount + ')' : '') +
         ' longTasks=' + longTasks +
         ' blocked(total,max ms)=' + r.blockedMs.toFixed(0) + '/' + r.blockedMax.toFixed(0) +
         ' dart~=' + dartEst.toFixed(1) + 'ms(est)');
@@ -538,6 +658,7 @@ function createPerfHud(opts) {
     state.nativeCount = 0; state.nativeSyncMs = 0; state.nativeWaitMs = 0; state.nativeFallback = 0;
     state.scaleCount = 0; state.uploadCount = 0; state.shaderCount = 0; state.uploadImgCount = 0; state.uploadImgMs = 0;
     state.fontParseCount = 0; state.fontParseMs = 0; state.layoutCount = 0; state.layoutMs = 0;
+    state.fakeBoldCount = 0;
     state.fontFetchCount = 0; state.fontFetchMs = 0;
     state.blockedMs = 0; state.blockedMax = 0;
 
@@ -583,4 +704,4 @@ function createPerfHud(opts) {
   return { start: start, stop: stop, report: report, setVisible: setVisible };
 }
 
-module.exports = { createBootTimer, createPerfHud, glMethodNames };
+module.exports = { createBootTimer, createPerfHud, glMethodNames, sfntWeight };

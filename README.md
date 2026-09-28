@@ -5,7 +5,7 @@
 ## 三步快速开始
 
 **1. 加依赖**——仓库尚未发布到 pub.dev,以 git 依赖引入本仓库(公开仓库,无需
-额外凭证;`ref` 建议固定到一个发布 tag,例如 `v0.2.0`,而不是 `main`,避免上游
+额外凭证;`ref` 建议固定到一个发布 tag,例如 `v0.2.1`,而不是 `main`,避免上游
 后续提交影响本地构建的可复现性):
 
 ```yaml
@@ -14,7 +14,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.2.0
+      ref: v0.2.1
 ```
 
 **2. 编译**——工程根跑一条命令(先跑 `dart run mp_flutter doctor` 自检工具链
@@ -144,7 +144,7 @@ dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter_wechat
-      ref: v0.2.0
+      ref: v0.2.1
 ```
 
 ```dart
@@ -276,6 +276,7 @@ dart run mp_flutter --project <工程> --output <产物目录> --semantics-mirro
 | `pkg-dart-*`、`pkg-wasm` | `main.dart.js` 分片、CanvasKit | 首帧前(`pkg-wasm` 走 preloadRule 预下载) |
 | `pkg-assets-boot` | `FontManifest.json`、`AssetManifest.bin(.json)`、FontManifest 里声明的全部字体(如 MaterialIcons)、回退 Roboto | 首帧前;与 CanvasKit 初始化、Dart 分片执行并行下载,引擎初始化取字体前等齐 |
 | `pkg-cjk` | 常用汉字合一字体(`cjk_font`,brotli 压缩的 TTF:level1 约 650KB,full 约 1.1MB,默认 full) | 首帧前;boot 一开始就拉,就位后直接读文件 |
+| `pkg-cjkb` | 合一字体的粗体(`cjk_font_bold`,默认跟随 `cjk_font`:full 约 1.17MB,level1 约 660KB) | 不挡首帧;dart/wasm 分包请求发出后再拉,晚到就首帧后补注册 |
 | `pkg-notices` | `assets/NOTICES`(第三方许可证全文,依赖多时 1–2MB) | 打开许可证页时 |
 | `pkg-fonts-*` | 简体中文回退字体分片(约 512KB 一个) | 页面第一次出现相应汉字时 |
 | `pkg-assets-*` | 图片、shader 等其余资源(按路径排序,约 512KB 一个) | 引擎第一次请求其中某个资源时 |
@@ -320,6 +321,38 @@ boot 一开始就拉这个分包,就位后用 `FileSystemManager.readCompressedF
 引擎把合一字体当作 Roboto 之后的第一个回退字体,缺字检测时也算上它、只把真正缺的码点交给选字体
 算法——字表外的字只拉它自己所在的那一片。选 TTF 不选 woff2:woff2 每次建 FreeType face 都要整份
 解压,无 JIT 的 iOS 上一次启动要解好几次;包内体积由 brotli 压缩解决。
+
+**合一字体粗体(`cjk_font_bold: level1 | full | false`,CLI `--cjk-font-bold=...`,默认跟随 `cjk_font`)**:
+标题、价格常用 `FontWeight.w600` 以上,而合一字体与回退分片都只有常规字重。SkParagraph 发现所选字体比请求
+的字重轻(请求 ≥600、字体 <600)就合成加粗(SkFont embolden)——每个字形第一次出现都要逐点加粗轮廓、重算
+边界。iOS 小程序没有 JIT,这正是进商品详情页那一帧 200–400ms 长帧里 layout 的大头。真实 CanvasKit(完整版
+wasm)基准,同一段 30 个没出现过的汉字、22px、宽 350,每种 60–100 次取中位数:
+
+| 运行环境 | 常规 w400 | 合成加粗 w700 | 合成加粗(先用 w400 预热同一字符串) | 真粗体 w700 | 重复排版(字形已缓存) |
+|---|---:|---:|---:|---:|---:|
+| JSC 关 JIT(bun,`BUN_JSC_useJIT=0`,近似 iOS) | 7.3ms | 30.2ms | 30.5ms | 7.4ms | 0.17ms |
+| V8 `--liftoff-only`(只有基线编译) | 0.63ms | 2.19ms | 2.21ms | 0.58ms | 0.014ms |
+| V8 默认 JIT | 0.32ms | 1.00ms | 1.05ms | 0.27ms | 0.010ms |
+
+预热 shaping 不改变合成加粗的开销,开销在逐字形加粗,不在 shaping;真粗体与常规一样快。所以随包带一份
+Noto Sans SC v37 Bold 子集(与常规同一字表,已入库),在 FontManifest 里作为同一家族(`MpNotoSansSC`)
+的第二个字体(字重 700)注册,引擎按字重匹配到它,回退字体表里仍只有一个 family 名。
+
+- **必须与 `cjk_font` 同档**:同一 family 下 SkParagraph 按字重只选一个字体排版,粗体缺的字直接画成
+  豆腐块(不会退回同家族的常规字体),而引擎缺字检测按家族把所有字体的覆盖取并集,认为"有字"就不去拉
+  回退分片;构建期对不同档直接报错。
+- **不挡首帧**:粗体放独立分包 `pkg-cjkb`(full 常规 + full 粗体超过单分包 2048KB),boot 在 dart/wasm/
+  启动资源包请求发出之后才开始读。引擎取字体时,粗体只要不晚于常规字体到就一起应答(常规字体本来就在
+  等,零额外等待;首帧前注册不发 fontsChange;模拟器里引擎取用等待 0–1ms);晚到则先按 404 应答(控制台
+  有一行引擎的 `not found (404)` 警告),首帧照常画(粗体文字这时仍是合成加粗),字节到了经入口包装在
+  首帧之后调用 `ui.loadFontFromList` 补注册——引擎发一次 fontsChange,框架把段落重排一遍。这次重排
+  字形缓存是热的,只多一次 shaping(基准:无 JIT 下每段约 0.6ms;模拟器该真实电商小程序首页 54 段 13ms),比首帧
+  等一个 1MB 的分包便宜。`--no-safe-area`(没有入口包装)时晚到的粗体不再使用。
+- **体积**:full 约 1.17MB、level1 约 660KB(brotli),总包相应增加;总包紧张时 `--cjk-font-bold=false`。
+- **没覆盖的**:字表外的字(回退分片)只有常规字重,粗体照旧合成;拉丁字母/数字排在 Roboto(只有常规)
+  上也仍是合成加粗——字形少,缓存之后没有开销。
+- `--perf-hud` 的长帧明细里 `fakeBold=N` 是本帧 build 的合成加粗段落数(字重 ≥600 而字体列表里没有
+  注册过粗体的家族),用来在真机上确认它是否还在。
 
 另外两处与字体相关的运行时处理(始终开启):
 - **同一份字体字节只解析一次**(`runtime/typeface-memo.js`):引擎每注册一批回退字体都新建
