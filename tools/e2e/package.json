@@ -1,0 +1,13 @@
+{
+  "name": "mp-flutter-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "miniprogram-automator": "^0.12.1"
+  },
+  "scripts": {
+    "test": "node --test assert-shim-coverage.test.js",
+    "accept": "node accept.js"
+  }
+}

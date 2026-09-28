@@ -1,0 +1,13 @@
+# mp-flutter 构建配置,见 packages/mp_flutter/README 与 lib/src/config.dart。
+# 命令行参数 > 这里的值 > 内置默认值。
+
+appid: touristappid
+output: build/weapp
+
+# 微信 tab 的“获取位置”演示用到 wx.getLocation:需要在 app.json 里声明
+# requiredPrivateInfos 与定位权限说明,否则真机会直接拒绝调用
+# (开发者工具不受此限制,但保持默认关闭时的行为一致仍应显式声明)。
+require_location: true
+
+# 本示例不需要 WXML 语义镜像(无障碍/页面内容索引),保持默认关闭以节省运行时开销。
+semantics_mirror: false

@@ -1,0 +1,19 @@
+{
+  "_comment": "已知会被触达、且确认引擎有降级分支的 undefined 访问。新增条目必须先确认安全。",
+  "flutterVersion": "3.41.9",
+  "knownUndefined": [
+    "canvas<el>.___dart_dispatch_record_ZxYxX_0_",
+    "canvas<el>.He",
+    "canvas<el>.Ne",
+    "window.FinalizationRegistry",
+    "window.Window",
+    "self.__mpNativePending",
+    "window.__mpNativePending"
+  ],
+  "_notes": {
+    "self.scheduleImmediate / self.setImmediate": "K5 起已移出基线:垫片提供 self.scheduleImmediate(真微任务)。dart2js 缺它时的'降级分支'是退化成 setTimeout 0,会让 rAF 帧插进 await 之间,引擎 preroll 读已 dispose 的 picture(cullRect 空指针)——不是安全降级。再次触达即回归。",
+    "window.Window": "安卓 UA(含 Chrome)下 dart2js 拦截器初始化探测 window.Window.name 以决定是否用 Chrome 快速取类型标签;缺失时退回 getTagFallback(与 iPhone UA 路径相同),安全。--force-platform android 验收实测触达。",
+    "self.__mpNativePending / window.__mpNativePending": "原生视图同步层(native-views.js)每次 createNativeViews() 初始化都无条件读一次这两个全局,把 Task 3 工厂可能抢先写入的 pending id 收进 awaiting 集合再删除该全局(见 native-views.js 文件头'调用约定'/'修复轮 2'注释)——即使这个 App 完全不用任何平台视图/MpVideo/MpMap(如本验收工程),这两次读取也总会发生,读到 undefined 时按'没有待处理注册'处理,是设计内的安全降级,不是遗漏。Phase 5 Task 4 补记(此前构建从未跑过 accept.js 的全新重建 + 本条 baseline 比对,drift 一直存在未被发现)。",
+    "canvas<el>.He / canvas<el>.Ne": "canvaskit.js 里摘掉 Safari WebGL2 workaround 后保留的 `a.X||(a.X=a.getContext)`(见 transform/canvaskit_js.dart):首次读到 undefined 即赋值,安全。X 是压缩后的名字,chromium 版为 He、完整版为 Ne(2026-09-28 改打完整版 CanvasKit 后实测触达)。"
+  }
+}

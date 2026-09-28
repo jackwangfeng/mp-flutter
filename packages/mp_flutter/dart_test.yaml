@@ -1,0 +1,7 @@
+tags:
+  slow:
+    # 消费者冒烟(flutter create + pub get + 完整构建,可能触发 esbuild 首次
+    # 自动安装联网),默认跳过。手动运行整套:
+    #   dart test --run-skipped -t slow
+    skip: "较慢且可能联网(flutter create/pub get/完整构建),默认不跑;手动运行: dart test --run-skipped -t slow"
+    timeout: 30x

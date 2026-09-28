@@ -1,0 +1,18 @@
+name: mp_flutter_wechat
+description: 在 mp-flutter 编译的微信小程序中调用微信登录、支付等能力;其它平台上调用会明确报错。
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  # menuButtonRect() 返回 dart:ui 的 Rect
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  # flutter test --platform chrome(channel_web_browser_test.dart)需要
+  flutter_test:
+    sdk: flutter
+  test: ^1.25.0

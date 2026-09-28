@@ -1,0 +1,24 @@
+# Flutter / Dart
+.dart_tool/
+build/
+.packages
+pubspec.lock
+.flutter-plugins-dependencies
+
+# Node
+node_modules/
+
+# 微信开发者工具
+project.private.config.json
+
+# SDD 工作区
+.superpowers/
+
+# E2E 验收工程构建产物(源码在 tools/e2e/apps/ 下入库,构建产物不入库)
+tools/e2e/out/
+
+# 真机调试临时产物(二维码、截图、预览信息)
+preview-qr.png
+preview-info.json
+qr-size.png
+微信图片_*.jpg
