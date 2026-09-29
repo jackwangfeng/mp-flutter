@@ -50,11 +50,28 @@ function startServer({ port }) {
     req.on('data', (d) => body.push(d));
     req.on('end', () => {
       const u = req.url.split('?')[0];
+      let m;
       if (u === '/api/hello') { res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ msg: '你好😀', n: 1 })); }
       else if (u === '/api/echo') { res.writeHead(200, { 'X-Method': req.method, 'X-Auth': req.headers.authorization || '', 'Content-Type': 'application/octet-stream' }); res.end(Buffer.concat(body)); }
       else if (u === '/api/404') { res.writeHead(404); res.end('nope'); }
       else if (u === '/api/slow') { setTimeout(() => { res.writeHead(200); res.end('slow'); }, 3000); }
       else if (u === '/img/red.png') { res.writeHead(200, { 'Content-Type': 'image/png' }); res.end(red); }
+      // accept-stress.js(压测 B 项/图片墙)专用:本地快速生成图片,不拉外网
+      // 图床——① 避免自动化里长时间拉服务端的图(B 项 120 张图 × 每次运行),
+      // ② 图片按 (id,w) 现算颜色,内容确定性可复现。`/stress/redirect/...`
+      // 先 302 跳到 `/stress/img/...`,验证 net 层跟随跳转后图片仍能正常解码
+      // (真实图片 CDN 常见的签名跳转场景)。
+      else if ((m = u.match(/^\/stress\/redirect\/(\d+)\/(\d+)$/))) {
+        res.writeHead(302, { Location: `/stress/img/${m[1]}/${m[2]}` });
+        res.end();
+      }
+      else if ((m = u.match(/^\/stress\/img\/(\d+)\/(\d+)$/))) {
+        const id = Number(m[1]);
+        const w = Math.max(1, Math.min(800, Number(m[2]) || 64));
+        const color = [(id * 47) % 256, (id * 91) % 256, (id * 131) % 256];
+        res.writeHead(200, { 'Content-Type': 'image/png' });
+        res.end(solidPng(w, w, color));
+      }
       // Phase 5 Task 4:MpVideo 验收用的一个真实 mp4(见 tools/e2e/fixtures/tiny.mp4,
       // ffmpeg 预生成的 1 秒纯色小视频,提交进仓库,不依赖运行 E2E 的机器装没装 ffmpeg)。
       else if (u === '/media/tiny.mp4') {

@@ -5,7 +5,7 @@
 ## 三步快速开始
 
 **1. 加依赖**——仓库尚未发布到 pub.dev,以 git 依赖引入本仓库(公开仓库,无需
-额外凭证;`ref` 建议固定到一个发布 tag,例如 `v0.2.1`,而不是 `main`,避免上游
+额外凭证;`ref` 建议固定到一个发布 tag,例如 `v0.2.2`,而不是 `main`,避免上游
 后续提交影响本地构建的可复现性):
 
 ```yaml
@@ -14,7 +14,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.2.1
+      ref: v0.2.2
 ```
 
 **2. 编译**——工程根跑一条命令(先跑 `dart run mp_flutter doctor` 自检工具链
@@ -144,7 +144,7 @@ dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter_wechat
-      ref: v0.2.1
+      ref: v0.2.2
 ```
 
 ```dart
@@ -428,6 +428,16 @@ font_base_url: https://cdn.example.com/mp-fonts/
 **不做**:按 App 文案做字体子集——电商类 App 的文字多由服务端动态下发,构建期子集会丢字。
 常用汉字合一字体是按 GB2312 固定字表切的通用子集(level1 / full),不依赖 App 文案;字表外的字照常走回退分片。
 
+## 能力边界 / 复杂页面指南
+
+mp-flutter 渲染管线在 iOS 真机(无 JIT)上对"重"页面比安卓/模拟器更敏感。仓
+库自带压测页(`example/lib/stress`,`--dart-define=MP_STRESS=true` 开启)在
+iPhone 15 / Xiaomi 2206122SC 真机上跑出了长列表、图片墙、长图文、大表单、
+视觉效果、原生组件七类场景的首帧/帧率/最长帧数据,并给出一个真实电商小程序
+的线上基线和"能撑多大"的可操作经验值(懒加载列表行数不受限、一次性构建的
+文字建议控制在约 1500 字/50 段以内、表单超过 10–15 个输入框建议分步等)。
+详见 [`docs/capability-guide.md`](docs/capability-guide.md)。
+
 ## 真机验证
 
 除模拟器(微信开发者工具)回归套件外,已在以下真机环境跑过一个真实电商小程序(交易类
@@ -459,6 +469,7 @@ App,覆盖列表滚动、图片、网络、微信能力等典型场景)完整验
 
 - [`docs/architecture.md`](docs/architecture.md) —— 设计与实现原理(BOM/DOM 垫片、分包、CanvasKit 定制等)
 - [`docs/support-matrix.md`](docs/support-matrix.md) —— 工具链版本、平台桥验证状态、已知限制汇总
+- [`docs/capability-guide.md`](docs/capability-guide.md) —— 能力边界 / 复杂页面指南:真机压测数据、能撑多大、推荐写法
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) —— CLI 退出码对照与处理办法
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) —— 开发环境、本地检查脚本、提交约定
 - [`CHANGELOG.md`](CHANGELOG.md) —— 版本历史

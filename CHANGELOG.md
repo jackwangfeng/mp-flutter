@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.2.2 — 2026-09-30
+
+新增仓库自带的真机压测页与测量工具,并把首批真机压测数据整理成一篇能力边界
+文档;不涉及运行时/构建管线代码改动。
+
+### 压测页与测量工具
+
+- **压测页**(`example/lib/stress`):只在编译时加 `--dart-define=MP_STRESS=true`
+  才会进最终产物,不加时对产物体积/行为零影响(`main.dart` 按这个编译期常量
+  二选一 `runApp`,dart2js 会摇树掉未选中的分支)。首帧自动依次跑完七项场景:
+  长列表(A)、图片墙(B)、长图文一次性构建(C)与懒加载对照(D)、大表单
+  (E)、视觉效果(F)、原生组件(G),每项打印一行 `[mp-stress]`(首帧、fps、
+  最长帧、jank 帧数等)
+- **`tools/e2e/accept-stress.js`**:自动构建 `example`(带 `MP_STRESS=true` 与
+  `--perf-hud`)、在微信开发者工具里跑完整套 A–G,收集 `[mp-stress]`/
+  `[mp-perf]` 遥测行并打印汇总表,断言七项均有输出、无 console error
+- **`tools/e2e/test-server.js`**:新增 `/stress/img/:id/:w`(按 id/宽度确定性
+  生成纯色 PNG,压测页图片墙用,不依赖外网图床)与 `/stress/redirect/:id/:w`
+  (302 跳转到前者,验证图片跳转后仍能正常解码)
+
+### 文档
+
+- 新增 [`docs/capability-guide.md`](docs/capability-guide.md)「能力边界与复杂
+  页面指南」:iPhone 15 / 安卓真机压测数据(七项场景的首帧/fps/最长帧)、一
+  个真实电商小程序的线上基线、"能撑多大"的可操作经验值(懒加载列表行数不受
+  限、一次性构建文字建议控制在约 1500 字/50 段以内、表单超过 10–15 个输入框
+  建议分步、大面积 `BackdropFilter`/阴影会把 iOS 帧率拉到约 30fps 等)、特别
+  贵的写法与推荐替代方案
+- README、`docs/support-matrix.md` 补充指向新指南的链接
+
 ## 0.2.1 — 2026-09-28
 
 在 0.2.0 的基础上给常用汉字合一字体补上真粗体子集,并修复 E2E 交互回归脚本在新版

@@ -39,7 +39,7 @@ SDK(该工程 `flutter pub get` 时用的那一套);显式指定的 SDK 与这�
 
 | 平台桥 | 状态 | 已知限制 |
 |---|---|---|
-| 渲染(CanvasKit / 多 canvas 合成) | ✅ 真机已验证(iPhone 15:首屏 129–144ms、59fps、像素精确) + 模拟器三种构建配置(stable / `flutter_ohos` / `--force-platform android`) | 绑定 CanvasKit;若上游 Flutter 转向 skwasm/Impeller Web 需重做;`canvasKitMaximumSurfaces: 1` 强制单 surface,多画布场景会别名到同一 canvas |
+| 渲染(CanvasKit / 多 canvas 合成) | ✅ 真机已验证(iPhone 15:首屏 129–144ms、59fps、像素精确) + 模拟器三种构建配置(stable / `flutter_ohos` / `--force-platform android`) | 绑定 CanvasKit;若上游 Flutter 转向 skwasm/Impeller Web 需重做;`canvasKitMaximumSurfaces: 1` 强制单 surface,多画布场景会别名到同一 canvas;复杂页面(长列表/图片墙/长图文/大表单/重效果/原生组件)在真机上的容量与"能撑多大"经验值见 [`docs/capability-guide.md`](capability-guide.md) |
 | 触摸 | 模拟器已验证(`accept-interact.js`) | 真机手势细节(多点触控、长按选词、复制粘贴)未逐项复核;Android 强制多画布光栅器仅在伪造 UA 下验证过 |
 | 文本输入 | 模拟器已验证 | 首次聚焦偶发丢一帧(`cullRect of null`,模拟器曾 7/7 次复现)根因是垫片缺 `self.scheduleImmediate` 致 Dart 微任务退化为 `setTimeout`、下一帧插进 `draw()` 的 `await` 与 preroll 之间读到在途 dispose 的 picture,**已修复**(K5,`4968feb`);缩放/旋转祖先下输入框尺寸/字号不准;**`--semantics-mirror` 与文本输入同时使用仍不可靠**(渲染管线崩溃已随上述修复排除,但复测发现另一问题——见下「已知限制」) |
 | 网络(`http`/`dio`/`NetworkImage`) | 模拟器已验证 | 真机仅能访问小程序后台配置的合法 HTTPS 域名;不自动管理 Cookie;不支持 `FormData`/`Blob`/同步 XHR;dio 的 `connectTimeout`/`receiveTimeout` 合并为一个总超时;重定向由 wx 自动跟随,`response.url`/`redirected` 不反映最终地址 |
@@ -89,4 +89,7 @@ SDK(该工程 `flutter pub get` 时用的那一套);显式指定的 SDK 与这�
     中文回退字体保持整套按需加载(或 `font_base_url` 走 CDN);常用汉字合一字体是按 GB2312 固定
     字表切的通用子集(level1 / full),不依赖 App 文案
 
-更细的“为什么”与实测数据见 [`docs/architecture.md`](architecture.md)。
+更细的“为什么”与实测数据见 [`docs/architecture.md`](architecture.md)。复杂
+页面(长列表、图片墙、长图文、大表单、重效果、原生组件)的真机压测数据、一
+个真实电商小程序的线上基线,以及"能撑多大"的可操作经验值,见
+[`docs/capability-guide.md`](capability-guide.md)。
