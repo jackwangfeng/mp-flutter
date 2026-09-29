@@ -17,7 +17,7 @@ import 'package:mp_flutter/src/emit_project.dart' show normalizeSplashColor;
 /// 手动与 pubspec.yaml 的 `version:` 保持一致——Dart 没有开销对等的运行时
 /// 方式读取自身包的 pubspec 只为取一个版本号(`resolvePackageRoot()` 倒是能
 /// 定位到包根,但读文件+解析 YAML 只为一个字符串不值得),这两处都极少改动。
-const kPackageVersion = '0.2.2';
+const kPackageVersion = '0.2.3';
 
 /// [runPipeline] 的签名,供 `runCli` 测试注入——单测不应该真的跑一遍
 /// `flutter build web`。
@@ -40,6 +40,8 @@ typedef PipelineRunner = Future<SizeReport> Function({
   bool safeArea,
   String? target,
   bool licenses,
+  bool shaderWarmup,
+  bool shaderWarmupLight,
   String? cjkFont,
   String? cjkFontBold,
   String? fontBaseUrl,
@@ -104,6 +106,18 @@ ArgParser buildArgParser() {
             '这种工程请用 --no-safe-area 关闭本包装,直接构建 --target 指向的文件。'
             '可被 mp_flutter.yaml 的 safe_area 覆盖。',
         defaultsTo: true)
+    ..addFlag('shader-warmup',
+        help: '首帧之后趁空闲,在引擎的 GrDirectContext 上把常见绘制组合(圆角裁剪、图片、阴影、'
+            '渐变、文字、半透明层、模糊…)各画一遍,让 GL program 提前编译,避免首次进入页面时的'
+            '着色器编译卡顿(iOS 无 JIT 时单个 program 可达上百 ms)。不占冷启动;有动画/滚动时暂停。'
+            '--no-shader-warmup 关闭。可被 mp_flutter.yaml 的 shader_warmup 覆盖。',
+        defaultsTo: true)
+    ..addFlag('shader-warmup-light',
+        help: '着色器预热只画轻项(文字/纯色/图片/圆/描边/路径等),跳过阴影/模糊/颜色矩阵/混合'
+            '这类真机上单个 program 可达上百 ms、没法再拆的重项——给低端机用,预热本身占的主线程'
+            '时间更低,代价是这些效果仍会在第一次用到时同步编译。对 --no-shader-warmup 无效。'
+            '可被 mp_flutter.yaml 的 shader_warmup_light 覆盖。',
+        defaultsTo: false)
     ..addFlag('licenses',
         help: '打包第三方许可证全文 assets/NOTICES(默认打包,放在按需分包里,只在打开'
             '许可证页时下载)。--no-licenses 换成空占位,省下 NOTICES 的体积(依赖多时 1–2MB);'
@@ -303,6 +317,8 @@ Future<int> runCli(
   final perfHud = pickBool('perf-hud', config.perfHud, false);
   final safeArea = pickBool('safe-area', config.safeArea, true);
   final licenses = pickBool('licenses', config.licenses, true);
+  final shaderWarmup = pickBool('shader-warmup', config.shaderWarmup, true);
+  final shaderWarmupLight = pickBool('shader-warmup-light', config.shaderWarmupLight, false);
   final cjkLevel = args['no-cjk-font'] as bool
       ? 'false'
       : (args.wasParsed('cjk-font') ? args['cjk-font'] as String : (config.cjkFont ?? 'full'));
@@ -398,6 +414,8 @@ Future<int> runCli(
       safeArea: safeArea,
       target: target,
       licenses: licenses,
+      shaderWarmup: shaderWarmup,
+      shaderWarmupLight: shaderWarmupLight,
       cjkFont: cjkFont,
       cjkFontBold: cjkFontBold,
       fontBaseUrl: fontBaseUrl,

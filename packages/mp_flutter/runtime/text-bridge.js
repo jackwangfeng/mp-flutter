@@ -14,6 +14,23 @@
  * - 透明原生框在聚焦期间覆盖 TextField 区域,框内的触摸由原生框消费、到不了画布,
  *   所以框内点击挪光标、长按选词不可用(光标位置以原生框为准)。
  *
+ * ## I1 修复:密码框聚焦/失焦时通知 Dart 侧(见 entrypoint.dart
+ * `_steadyCursorOnIOS` 的注释、本文件 `createPasswordFocusBridge`)
+ *
+ * iOS 目标平台下入口包装让 TextField 光标常亮不闪(避免聚焦期间持续 60fps
+ * 出帧),副作用是密码框隐藏"刚输入的那个字符"依赖的光标 tick 也停了,最后
+ * 一位会一直明文显示。这里在检测到聚焦/失焦元素是 `password:true` 时,经
+ * `opts.passwordFocus`(`self.__mpPasswordFocus`,boot.js 在 loadDart 之前挂上)
+ * 通知入口包装临时切回闪烁、失焦后恢复常亮。
+ *
+ * ## M6 修复:轮询退避后需要能被主动唤醒
+ *
+ * 空闲超过 `IDLE_AFTER_MS` 后轮询退到 `IDLE_POLL_MS`,引擎侧的变化最多要等
+ * 这么久才同步到原生框(见下文 `IDLE_POLL_MS` 注释的窄窗口场景)。触摸画布
+ * (`touchstart`)、键盘高度变化(两者都很可能紧接着有文本框几何/焦点变化)
+ * 时调用返回对象上新增的 `wake()`,主动回到逐帧轮询,见 pipeline.dart 的
+ * `onMpTouch`/`wx.onKeyboardHeightChange`。
+ *
  * ## I3 修复(2026-09-27 终审):`--semantics-mirror` 打开、语义树被激活后
  *
  * 引擎的 `HybridTextEditing.strategy` 一旦 `EngineSemantics.instance.
@@ -45,6 +62,15 @@
  * 物理像素。
  */
 const POLL_MS = 16;
+/**
+ * 聚焦后几何/值一直没变时的轮询间隔。每次轮询都要读样式、算几何、序列化比较,
+ * 16ms 一次在无 JIT 的 iOS 上是持续的主线程占用(模拟器实测聚焦期间约 6.5ms/s,
+ * 真机按 25~30 倍估算 150~200ms/s);有变化(引擎挪了位置、原生输入、推了值)
+ * 就立刻回到 POLL_MS,IDLE_AFTER_MS 内都没变化才退到这个间隔。滚动列表时原生框
+ * 最多晚一个 IDLE_POLL_MS 跟上,之后恢复逐帧跟随。
+ */
+const IDLE_POLL_MS = 100;
+const IDLE_AFTER_MS = 500;
 
 function parseTranslate(transform) {
   const s = String(transform || '');
@@ -127,6 +153,46 @@ function confirmTypeOf(el) {
   return ['done', 'next', 'search', 'send', 'go'].indexOf(hint) >= 0 ? hint : 'done';
 }
 
+/**
+ * 密码框聚焦状态 → Dart 入口包装(I1 修复,见 entrypoint.dart 里
+ * `_steadyCursorOnIOS` 的注释)。
+ *
+ * iOS 目标平台下入口包装把 `EditableText.debugDeterministicCursor` 设成
+ * `true`(光标常亮、消除聚焦期间的 60fps 淡入淡出动画),副作用是密码框隐藏
+ * 刚输入那个字符所依赖的光标 tick 也停了——密码框最后一位会一直明文显示,
+ * 直到下一次输入或失焦。这里把"当前是否有 password:true 的输入框聚焦"这个
+ * 布尔状态报给 Dart 侧,入口包装监听后聚焦时临时把标志切回 false、失焦后
+ * 恢复 true。
+ *
+ * 必须在 `manifest.loadDart()`(main.dart.js 执行、入口包装 `main()` 跑)之前
+ * 就把 `bridge` 挂到 `self.__mpPasswordFocus`(见 boot.js),否则入口包装
+ * `main()` 里注册监听时读不到全局——文本桥本身是 boot 成功之后、承载页
+ * onLoad 里才创建的(见 pipeline.dart),创建时把这里返回的对象整个传给
+ * `createTextBridge({ passwordFocus: ... })`,两边共享同一个 `bridge`。
+ */
+function createPasswordFocusBridge() {
+  const listeners = [];
+  const bridge = {
+    obscure: false,
+    /** 订阅变化;返回取消函数。回调异常不影响其它订阅者。 */
+    listen(fn) {
+      if (typeof fn !== 'function') return () => {};
+      listeners.push(fn);
+      return () => { const i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); };
+    },
+  };
+  return {
+    bridge,
+    /** 供 text-bridge 在聚焦/失焦时调用;值未变不重复通知。 */
+    set(v) {
+      v = !!v;
+      if (v === bridge.obscure) return;
+      bridge.obscure = v;
+      listeners.slice().forEach((fn) => { try { fn(); } catch (e) { /* 订阅者异常不影响其它订阅者 */ } });
+    },
+  };
+}
+
 function createTextBridge(opts) {
   const shim = opts.shim;
   const scale = shim.window.innerWidth / opts.cssWidth;
@@ -135,6 +201,7 @@ function createTextBridge(opts) {
   let pushed = null;        // 自上次原生输入以来推给原生的值(null = 没推过)
   let lastSent = '';        // 上次发给页面的序列化状态
   let timer = null;
+  let lastActive = 0;       // 最近一次有变化(发出状态 / 原生输入 / 新聚焦)的时间
   let session = 0;          // 每检测到一次新的聚焦元素递增;原生框带着它,迟到的 blur 据此识别
   let paused = false;       // 承载页切后台时暂停轮询(onHide/onShow)
 
@@ -179,20 +246,52 @@ function createTextBridge(opts) {
   // 去重按"除 value 外的字段"比较:value 只在推送的那一个状态里出现,下一个 tick
   // 它消失并不代表有变化,不应再发一次状态(页面侧 value 缺省即"不动原生值")。
   function tick() {
+    if (opts.onStats) {
+      const t0 = Date.now();
+      tickInner();
+      try { opts.onStats(Date.now() - t0); } catch (e) { /* 诊断失败不影响输入 */ }
+      return;
+    }
+    tickInner();
+  }
+  function tickInner() {
     const s = compute();
     const rest = Object.assign({}, s);
     delete rest.value;
     const key = JSON.stringify(rest);
-    if (key !== lastSent || 'value' in s) { lastSent = key; opts.onState(s); }
+    if (key !== lastSent || 'value' in s) { lastSent = key; lastActive = Date.now(); opts.onState(s); }
   }
 
-  function start() { if (!timer && !paused) timer = setInterval(tick, POLL_MS); tick(); }
-  function stop() { if (timer) { clearInterval(timer); timer = null; } tick(); }
-  function attach(n) { el = n; session++; lastNative = null; pushed = null; start(); }
+  // setTimeout 链(不是 setInterval):间隔随活跃程度变,见 IDLE_POLL_MS
+  function loop() {
+    timer = null;
+    if (paused || !el) return;
+    tick();
+    if (paused || !el) return;
+    timer = setTimeout(loop, Date.now() - lastActive > IDLE_AFTER_MS ? IDLE_POLL_MS : POLL_MS);
+  }
+  function start() {
+    lastActive = Date.now();
+    if (!timer && !paused) timer = setTimeout(loop, POLL_MS);
+    tick();
+  }
+  function stop() { if (timer) { clearTimeout(timer); timer = null; } tick(); }
+  // 有变化的迹象(原生输入等):回到逐帧轮询
+  function wake() {
+    lastActive = Date.now();
+    if (timer && !paused && el) { clearTimeout(timer); timer = setTimeout(loop, POLL_MS); }
+  }
+  function attach(n) {
+    el = n; session++; lastNative = null; pushed = null;
+    // I1 修复:聚焦元素是否 password:true 的密码框,报给 Dart 侧(见
+    // createPasswordFocusBridge 文档)
+    if (opts.passwordFocus) opts.passwordFocus.set(inputKind(n).password);
+    start();
+  }
 
   const off = shim.onFocusChange((n) => {
     if (isEditable(n)) attach(n);
-    else { el = null; stop(); }
+    else { el = null; stop(); if (opts.passwordFocus) opts.passwordFocus.set(false); }
   });
   // 桥可能晚于引擎聚焦创建(例如 autofocus 的输入框在引擎启动期间就已聚焦),
   // 此时不会再有焦点切换通知,创建时主动接管一次
@@ -205,6 +304,7 @@ function createTextBridge(opts) {
       const cursor = ev.cursor == null ? value.length : ev.cursor;
       lastNative = value;
       pushed = null;
+      wake();
       el.value = value;
       el.setSelectionRange(cursor, cursor);
       el.dispatchEvent(new shim.window.Event('input', { bubbles: true }));
@@ -226,7 +326,7 @@ function createTextBridge(opts) {
     /** 切后台:停掉轮询定时器(不改焦点与状态)。 */
     pause() {
       paused = true;
-      if (timer) { clearInterval(timer); timer = null; }
+      if (timer) { clearTimeout(timer); timer = null; }
     },
     /** 回前台:仍有聚焦元素则恢复轮询并立即同步一次。 */
     resume() {
@@ -234,7 +334,19 @@ function createTextBridge(opts) {
       paused = false;
       if (el) start();
     },
-    dispose() { off(); if (timer) clearInterval(timer); timer = null; },
+    /**
+     * M6 修复:轮询退避后,引擎侧变化最多要等 IDLE_POLL_MS 才追上(见文件头
+     * `IDLE_POLL_MS` 注释)。触摸画布开始交互、或键盘高度变化(两者都很可能
+     * 紧接着有文本框几何/焦点变化)时调这个,主动回到逐帧轮询,不等窄窗口里
+     * 的旧值被下一次操作用旧数据覆盖。
+     */
+    wake() { wake(); },
+    dispose() {
+      off();
+      if (timer) clearTimeout(timer);
+      timer = null;
+      if (opts.passwordFocus) opts.passwordFocus.set(false);
+    },
   };
 }
 
@@ -248,7 +360,13 @@ function createTextBridge(opts) {
  * 原生侧当前值(对原生框是空操作,但让页面数据变了),在回调里再写目标值。
  * @param setData (patch, cb?) => void,即 page.setData
  */
-function createViewSync(setData) {
+function createViewSync(rawSetData, onSetData) {
+  // onSetData(patch, ms):仅 --perf-hud 传入,量每次 setData 同步部分的耗时
+  const setData = typeof onSetData !== 'function' ? rawSetData : function (patch, cb) {
+    const t0 = Date.now();
+    rawSetData(patch, cb);
+    try { onSetData(patch, Date.now() - t0); } catch (e) { /* 忽略 */ }
+  };
   let viewValue;     // 页面数据里实际的 mpInput.value
   let nativeValue;   // 原生框当前实际显示的值(用户输入上报 / 真正落地的写入)
   let cursor;        // 最近一次状态里的 cursor(第二步写沿用最新值,不回滚光标)
@@ -296,4 +414,4 @@ function createViewSync(setData) {
   };
 }
 
-module.exports = { createTextBridge, createViewSync };
+module.exports = { createTextBridge, createViewSync, createPasswordFocusBridge };

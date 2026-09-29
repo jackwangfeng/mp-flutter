@@ -6,7 +6,7 @@ const path = require('path');
 // perf-hud.js 不碰任何小程序专属全局(wx/window/self),纯函数式包装逻辑,
 // 直接 require 即可单测,不需要 createMpContext 的 vm 沙箱。
 const RT = path.resolve(__dirname, '../../packages/mp_flutter/runtime');
-const { createBootTimer, createPerfHud, glMethodNames, sfntWeight } = require(path.join(RT, 'perf-hud.js'));
+const { createBootTimer, createPerfHud, createFrameProf, programDigest, glMethodNames, sfntWeight } = require(path.join(RT, 'perf-hud.js'));
 
 /** 可控时钟:调用方手动推进 nowValue 模拟耗时。 */
 function makeClock(start = 0) {
@@ -557,5 +557,111 @@ test('合成加粗计数:w≥600 且字体列表里没有注册过粗体的家�
   canvas.requestAnimationFrame(() => { para(700, ['Roboto', 'MpNotoSansSC'], false); clock.advance(40); });
   canvas.fire(48);
   assert.strictEqual(hud.report().fakeBoldCount, 0);
+  hud.stop();
+});
+
+test('programDigest:顶点 attribute 名 + 片元 uniform 名(去掉 _S0/_c0 后缀)+ 源码哈希', () => {
+  const vs = 'attribute highp vec2 inPosition;\nin mediump vec4 inColor;\nvoid main(){ gl_Position = vec4(0.0); }';
+  const fs = 'uniform highp vec4 uinnerRect_S1_c0;\nuniform mediump vec2 uradiusPlusHalf_S1_c0;\nuniform sampler2D uTextureSampler_0_S0;\nvoid main(){}';
+  const d = programDigest(vs, fs);
+  assert.deepStrictEqual(d.attrs, ['inPosition', 'inColor']);
+  assert.deepStrictEqual(d.unis, ['uinnerRect', 'uradiusPlusHalf', 'uTextureSampler_0']);
+  assert.match(d.hash, /^[0-9a-f]{8}$/);
+  assert.notStrictEqual(programDigest(vs, fs + ' ').hash, d.hash);
+});
+
+test('program 日志:每个 program 一行(编译总耗时 + 摘要),report 行带累计 programs=', () => {
+  const clock = makeClock();
+  const canvas = makeFakeCanvas();
+  let id = 0;
+  const gl = {
+    createShader() { return { id: ++id }; },
+    shaderSource() {},
+    compileShader() { clock.advance(10); },
+    attachShader() {},
+    linkProgram() { clock.advance(5); },
+    getProgramParameter() { clock.advance(1); return true; },
+  };
+  const logs = [];
+  const hud = createPerfHud({ canvas, gl, CK: null, setData: () => {}, now: clock.now, log: (m) => logs.push(m) });
+  canvas.requestAnimationFrame(() => {
+    const prog = {};
+    const v = gl.createShader(); gl.shaderSource(v, 'attribute vec2 inPosition; void main(){gl_Position=vec4(0);}');
+    gl.compileShader(v);
+    const f = gl.createShader(); gl.shaderSource(f, 'uniform vec4 ucolor_S0; void main(){}');
+    gl.compileShader(f);
+    gl.attachShader(prog, v); gl.attachShader(prog, f);
+    gl.linkProgram(prog); gl.getProgramParameter(prog, 0x8B82);
+  });
+  canvas.fire();
+  canvas.requestAnimationFrame(() => {});
+  canvas.fire();
+  const line = logs.find((l) => l.indexOf('[mp-perf] program #1') === 0);
+  assert.ok(line, logs.join('\n'));
+  assert.match(line, /program #1 26\.0ms [0-9a-f]{8} attrs=inPosition unis=ucolor/);
+  hud.report();
+  assert.ok(logs.some((l) => /programs=1\/26\.0/.test(l)));
+  hud.stop();
+});
+
+test('框架帧分项:入口包装报的 build/layout/paint… 进长帧明细,other 扣掉框架与光栅化', () => {
+  const clock = makeClock();
+  const canvas = makeFakeCanvas();
+  const frameProf = createFrameProf();
+  const logs = [];
+  const hud = createPerfHud({ canvas, gl: null, CK: null, frameProf, setData: () => {}, now: clock.now, log: (m) => logs.push(m) });
+  canvas.requestAnimationFrame(() => {
+    clock.advance(80);
+    frameProf.frame(5, 40, 20, 1, 8, 3, 0, 0, 2, 1, 300);
+  });
+  canvas.fire(16);
+  canvas.requestAnimationFrame(() => {});
+  canvas.fire(32);
+  const lf = logs.find((l) => l.indexOf('long-frame') >= 0);
+  assert.ok(lf, logs.join('\n'));
+  assert.match(lf, /long-frame 80\.0ms dart=79\.0\(transient 5\.0, build 40\.0, layout 20\.0, bits 1\.0, paint 8\.0, comp 3\.0, post 2\.0\) metrics=1 inset=300 raster=0\.0 \|/);
+  assert.match(lf, /other=1\.0$/);
+  hud.stop();
+});
+
+test('光栅化在回调返回后的微任务里:getCanvas→flush 并入当前帧(raster=),其中的着色器编译算帧内', () => {
+  const clock = makeClock();
+  const canvas = makeFakeCanvas();
+  function Surface() {}
+  Surface.prototype.getCanvas = function () { return {}; };
+  Surface.prototype.flush = function () {};
+  const CK = { Surface };
+  const gl = { compileShader() { clock.advance(30); } };
+  const logs = [];
+  const hud = createPerfHud({ canvas, gl, CK, setData: () => {}, now: clock.now, log: (m) => logs.push(m) });
+  const s = new Surface();
+  canvas.requestAnimationFrame(() => { clock.advance(10); });
+  canvas.fire(16);
+  // 引擎异步光栅化:回调返回之后
+  s.getCanvas(); gl.compileShader(); clock.advance(20); s.flush();
+  clock.advance(5);
+  canvas.requestAnimationFrame(() => {});
+  canvas.fire(32);
+  const lf = logs.find((l) => l.indexOf('long-frame') >= 0);
+  assert.ok(lf, logs.join('\n'));
+  assert.match(lf, /long-frame 60\.0ms shader=30\.0/);
+  assert.ok(!logs.some((l) => l.indexOf('gap') >= 0), '光栅化不再记成帧外');
+  hud.stop();
+});
+
+test('note():文本桥耗时 tb=、setData 次数/字节、resize 次数进帧外明细', () => {
+  const clock = makeClock();
+  const canvas = makeFakeCanvas();
+  const logs = [];
+  const hud = createPerfHud({ canvas, gl: null, CK: null, setData: () => {}, now: clock.now, log: (m) => logs.push(m), heartbeat: false });
+  canvas.requestAnimationFrame(() => {});
+  canvas.fire(16);
+  clock.advance(150);
+  hud.note('tb', 12); hud.note('setData', 9, 240); hud.note('resize');
+  canvas.requestAnimationFrame(() => {});
+  canvas.fire(32);
+  const gap = logs.find((l) => l.indexOf('gap') >= 0);
+  assert.ok(gap, logs.join('\n'));
+  assert.match(gap, /tb=21\.0 setData=1\/240B resize=1/);
   hud.stop();
 });

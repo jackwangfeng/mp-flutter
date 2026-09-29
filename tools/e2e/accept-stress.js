@@ -25,6 +25,18 @@
  *                          环境不拉外网图床、不产生长耗时网络等待。
  *   E2E_STRESS_TIMEOUT_MS  整体超时(含构建 + 驱动),默认 600000(10 分钟),
  *                          超时直接非零退出,不会无限期挂着。
+ *   STRESS_FORCE_PLATFORM  ios / android / android-noIntl:构建时加
+ *                          `--verify --force-platform <值>`(模拟真机 JS 引擎,
+ *                          例如在开发者工具里复现 iOS 路径;--verify 每帧多一
+ *                          次 1px readPixels,绝对数字偏大,只看相对占比)
+ *   STRESS_EXTRA_ARGS      额外构建参数(空格分隔),如 `--no-shader-warmup`
+ *   STRESS_NO_BUILD        设了就不重新构建,直接驱动已有产物(改过产物里的
+ *                          perf-hud 阈值等调试时用)
+ *   STRESS_LOG             把全部 console 行写到这个文件(事后细看/对比用)
+ *   STRESS_SETTLE_MS       驱动后等待多久再收集(默认 240000;只跑一两项时可调小)
+ *   STRESS_E_HOLD_MS       E 项每次聚焦后保持多久再失焦(默认 0:下一帧就失焦)
+ *   STRESS_ONLY            只跑列出的项(字母,如 `AE`),经 `--dart-define=
+ *                          STRESS_ONLY` 传给压测页;断言也只查这几项
  *
  * 图片来源(B 项/图片墙):默认用 `tools/e2e/test-server.js` 新增的
  * `/stress/redirect/{i}/{w}` 路由——先 302 跳到 `/stress/img/{i}/{w}`,验证
@@ -56,7 +68,7 @@ const EXPECTED_IDS = [
   'E_big_form',
   'F_effects',
   'G_native',
-];
+].filter((id) => !process.env.STRESS_ONLY || process.env.STRESS_ONLY.toUpperCase().includes(id[0]));
 
 function resolveFlutterBin() {
   if (process.env.FLUTTER_BIN) return process.env.FLUTTER_BIN;
@@ -84,6 +96,12 @@ function buildExample({ flutterBin, stressImg, stressImgN, stressImgWidths }) {
     '--dart-define', `STRESS_IMG_N=${stressImgN}`,
     '--dart-define', `STRESS_IMG_WIDTHS=${stressImgWidths}`,
   ];
+  if (process.env.STRESS_E_HOLD_MS) args.push('--dart-define', `STRESS_E_HOLD_MS=${process.env.STRESS_E_HOLD_MS}`);
+  if (process.env.STRESS_ONLY) args.push('--dart-define', `STRESS_ONLY=${process.env.STRESS_ONLY}`);
+  const forced = process.env.STRESS_FORCE_PLATFORM;
+  if (forced) args.push('--verify', '--force-platform', forced);
+  const extra = (process.env.STRESS_EXTRA_ARGS || '').split(/\s+/).filter(Boolean);
+  args.push(...extra);
   console.log('== 构建 example(MP_STRESS=true, --perf-hud) →', outDir, '==');
   const r = spawnSync(fs.existsSync(dartBin) ? dartBin : 'dart', args, {
     cwd: REPO_ROOT, env, stdio: 'inherit',
@@ -109,13 +127,35 @@ function parseStressLine(line) {
   return { id, first, fps, max, jank50, jank100, frames, extra };
 }
 
+/**
+ * 按压测项汇总着色器编译(`[mp-perf]` 每秒行的 `shader=次数/ms`)、预热与
+ * 帧拆分:某项的 `[mp-stress]` 行之前、上一项之后的 perf 行都算这一项;第一
+ * 项之前的算「启动」。
+ */
+function printShaderSummary(lines) {
+  const rows = [];
+  let cur = { id: '启动', count: 0, ms: 0, longFrames: 0 };
+  for (const raw of lines) {
+    const l = raw.indexOf('[mp-') >= 0 ? raw.slice(raw.indexOf('[mp-')) : raw;
+    const m = /^\[mp-perf\] fps=.* shader=(\d+)\/([\d.]+)/.exec(l);
+    if (m) { cur.count += Number(m[1]); cur.ms += Number(m[2]); continue; }
+    if (/^\[mp-perf\] long-frame/.test(l)) { cur.longFrames++; continue; }
+    const s = /^\[mp-stress\] (\S+) first=/.exec(l);
+    if (s) { cur.id = s[1]; rows.push(cur); cur = { id: '(项间)', count: 0, ms: 0, longFrames: 0 }; }
+  }
+  console.log('\n== 着色器编译(gl 调用次数/耗时,按项)==');
+  rows.forEach((r) => console.log('  ' + r.id.padEnd(22) + ' shader=' + r.count + '/' + r.ms.toFixed(1) + 'ms long-frame=' + r.longFrames));
+  lines.filter((l) => /\[mp-boot\] (total|shader-warmup)|\[mp-perf\] (shader-warmup|warmup)/.test(l))
+    .forEach((l) => console.log('  ' + l.slice(l.indexOf('[mp-'))));
+}
+
 async function main() {
   const flutterBin = resolveFlutterBin();
   const stressImg = process.env.STRESS_IMG || `http://127.0.0.1:${IMG_PORT}/stress/redirect/{i}/{w}?v={k}`;
   const stressImgN = process.env.STRESS_IMG_N || '23';
   const stressImgWidths = process.env.STRESS_IMG_WIDTHS || '160,320,480,640';
 
-  buildExample({ flutterBin, stressImg, stressImgN, stressImgWidths });
+  if (!process.env.STRESS_NO_BUILD) buildExample({ flutterBin, stressImg, stressImgN, stressImgWidths });
 
   const server = await startServer({ port: IMG_PORT });
   try {
@@ -123,8 +163,17 @@ async function main() {
     // 驱动;A~G 全部跑完(含 500 行长列表/6000 字长文两次来回滚动等)在真机
     // 上可能明显慢于开发者工具里的模拟器(有 JIT),settleMs 给足余量,
     // 外层再套一个硬超时兜底(见 overallTimeoutMs)。
-    const r = await runE2E({ projectPath: outDir, settleMs: 4 * 60 * 1000 });
+    const settleMs = Number(process.env.STRESS_SETTLE_MS || 4 * 60 * 1000);
+    let r;
+    try {
+      r = await runE2E({ projectPath: outDir, settleMs });
+    } catch (e) {
+      // 开发者工具偶发内部错误(如 getPageMetaByWebviewId(...) is null):重跑一次驱动(不重新构建)
+      console.log('驱动失败,重跑一次:' + (e && e.message));
+      r = await runE2E({ projectPath: outDir, settleMs });
+    }
 
+    if (process.env.STRESS_LOG) fs.writeFileSync(process.env.STRESS_LOG, r.lines.join('\n') + '\n');
     const stressLines = extractTagged(r.lines, '[mp-stress]');
     const perfLines = extractTagged(r.lines, '[mp-perf]');
     const parsed = stressLines.map(parseStressLine).filter(Boolean);
@@ -155,6 +204,7 @@ async function main() {
         p.jank50.padEnd(7), p.jank100.padEnd(8), p.frames.padEnd(7), p.extra,
       );
     }
+    printShaderSummary(r.lines);
     console.log(`\n[mp-perf] 行数: ${perfLines.length}${perfLines.length ? '(节选见下)' : ''}`);
     perfLines.slice(0, 5).forEach((l) => console.log('  ' + l));
 

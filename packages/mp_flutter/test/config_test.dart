@@ -98,6 +98,26 @@ perf_hud: true
       expect(cfg.perfHud, true);
     });
 
+    test('shader_warmup:布尔,未配置为 null', () {
+      final cfg = loadConfig('/repo/app',
+          fileExists: (path) => path == '/repo/app/mp_flutter.yaml', readFile: (_) => 'shader_warmup: false\n',
+          warn: (m) => fail('不应有未知键警告:$m'));
+      expect(cfg.shaderWarmup, false);
+      final empty = loadConfig('/repo/app',
+          fileExists: (path) => path == '/repo/app/mp_flutter.yaml', readFile: (_) => 'appid: x\n');
+      expect(empty.shaderWarmup, isNull);
+    });
+
+    test('shader_warmup_light:布尔,未配置为 null', () {
+      final cfg = loadConfig('/repo/app',
+          fileExists: (path) => path == '/repo/app/mp_flutter.yaml', readFile: (_) => 'shader_warmup_light: true\n',
+          warn: (m) => fail('不应有未知键警告:$m'));
+      expect(cfg.shaderWarmupLight, true);
+      final empty = loadConfig('/repo/app',
+          fileExists: (path) => path == '/repo/app/mp_flutter.yaml', readFile: (_) => 'appid: x\n');
+      expect(empty.shaderWarmupLight, isNull);
+    });
+
     test('体积/启动界面相关键:licenses / font_base_url / splash_title / splash_color', () {
       final cfg = loadConfig(
         '/repo/app',

@@ -44,6 +44,37 @@ void main() {
     expect(src, contains('ui.loadFontFromList(bytes.toDart, fontFamily: family.toDart)'));
   });
 
+  test('入口包装:iOS 目标平台在用户 main 之前让光标常亮(不跑 60fps 淡入淡出动画)', () {
+    final src = buildEntrypointSource('x');
+    expect(src.indexOf('_steadyCursorOnIOS();'), lessThan(src.indexOf('m();')));
+    expect(src, contains('defaultTargetPlatform == TargetPlatform.iOS'));
+    expect(src, contains('EditableText.debugDeterministicCursor = true;'));
+  });
+
+  // I1 修复:密码框最后一位明文常驻——iOS 常亮光标让 obscureText 的短暂明文
+  // 展示计时(靠光标 tick 递减)永远不会被消费。入口包装监听
+  // self.__mpPasswordFocus(text-bridge.js 在密码框聚焦/失焦时维护),聚焦时
+  // 临时把标志切回 false、失焦后恢复 true。
+  test('入口包装:监听 self.__mpPasswordFocus,密码框聚焦/失焦时切换 debugDeterministicCursor', () {
+    final src = buildEntrypointSource('x');
+    expect(src, contains("@JS('__mpPasswordFocus')"));
+    expect(src, contains('extension type _PasswordFocusBridge'));
+    // 监听回调必须能同时切到 false(聚焦)与恢复 true(失焦),不是写死一个值
+    expect(src, contains('EditableText.debugDeterministicCursor = !obscure;'));
+    // 监听注册在 _steadyCursorOnIOS 的 iOS/macOS 分支里,与常亮设置同生命周期
+    final steadyBody = src.substring(
+        src.indexOf('void _steadyCursorOnIOS()'), src.indexOf('@JS(\'__mpPasswordFocus\')'));
+    expect(steadyBody, contains('_passwordFocusBridge'));
+  });
+
+  test('入口包装:--perf-hud 帧分项只在 self.__mpFrameProf 存在时生效,否则全部走 super', () {
+    final src = buildEntrypointSource('x');
+    expect(src, contains("@JS('__mpFrameProf')"));
+    expect(src, contains('_prof == null ? super.createRootPipelineOwner() : _ProfRootPipelineOwner()'));
+    expect(src, contains('if (prof == null) return super.handleDrawFrame();'));
+    expect(src, contains('final class _ProfRootPipelineOwner extends PipelineOwner'));
+  });
+
   test('没有 lib/main.dart:跳过(不致命)', () {
     project(mainDart: false);
     expect(() => writeEntrypoint(tmp.path), throwsA(isA<EntrypointSkipped>()));

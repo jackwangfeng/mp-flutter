@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.2.3 — 2026-09-30
+
+新增着色器预热与表单/输入体验优化,减少长列表、大表单等场景的卡顿,并修复真机
+复测中发现的密码框、多指触控、文本桥唤醒等问题。
+
+- **着色器预热**(`shader_warmup`,默认开;`--no-shader-warmup` 关):首帧之后趁空闲(最近
+  150ms 引擎没有出帧,也没有手指按着屏幕),在引擎的 GrDirectContext 上的离屏目标里逐组画
+  常见绘制组合(文字、圆角裁剪图片、阴影、BoxShadow 模糊、渐变、半透明层、BackdropFilter…),
+  让 GL program 提前编译;有动画/滚动/触摸即暂停。引擎各 CkSurface 的 GrDirectContext 合并
+  成一个(小程序里它们本就共用一个 WebGL 上下文),预热与 toImage 路径共享 program 缓存。
+  框架的 `PaintingBinding.shaderWarmUp` 在 Web 上画在 pictureToImageSurface 的另一个
+  GrDirectContext 上,预热不到屏幕用的缓存。
+- **每片时间预算 + 重组合拆分**:按单个 program 的编译/链接开销把绘制组合分成"轻项"
+  (文字、纯色矩形/圆角、图片、圆、描边、路径…)与"重项"(阴影按遮挡 flags 拆成
+  opaque/transparent 两项、`BoxShadow`/`BackdropFilter` 按核宽拆、颜色矩阵/混合各一项)——
+  真机上重项单个 program 可达上百 ms,拆开后一项只对应一个 program。轻项一片(一次
+  空闲检查)最多画 8ms 就让出主线程,剩下的留到下一次空闲检查;重项没法再拆,改为要求
+  最近 1s 内既没有画面刷新也没有手指按着才画,每片只画一个,解决了真机实测单片 426ms
+  的长任务。新增 `shader_warmup_light`(默认关;`--shader-warmup-light`)只画轻项、
+  跳过全部重项,给对预热占用主线程更敏感的场景用。
+- **iOS 光标常亮**:iOS 目标平台下 TextField 光标的淡入淡出动画让聚焦期间一直以 60fps 出帧
+  (每帧整屏合成 + 光栅化);入口包装改成光标常亮不闪(`EditableText.debugDeterministicCursor`),
+  聚焦后没有别的动画就不出帧。应用可在 `main()` 里设回 `false` 恢复闪烁。
+- **修复密码框最后一位明文常驻**:上面这项常亮光标关掉了 iOS 光标 tick,而
+  `obscureText` 输完一个字符后短暂明文显示、再自动隐藏,恰恰是靠这个 tick 计时——
+  停用后最后一位会一直明文显示,直到下一次输入或失焦。text-bridge.js 在检测到聚焦/
+  失焦元素是 `password:true` 的密码框时通知入口包装(`self.__mpPasswordFocus`),聚焦时
+  临时把标志切回 `false`、失焦后恢复 `true`,不影响其余 iOS 输入框仍然常亮。
+- 文本输入桥:聚焦后 500ms 内几何/值没有变化,轮询从 16ms 退到 100ms,有变化立即恢复;
+  新增触摸画布(`touchstart`)、键盘高度变化(`wx.onKeyboardHeightChange`)
+  时主动 `wake()`,缩短退避后引擎侧变化同步到原生框的最坏延迟。
+- **修复着色器预热的多指触控计数**:`pointerState.down` 以前按 touchstart/touchend
+  事件次数 ±1,两个手指分两次按下、一个 touchend 一起抬起(`changedTouches` 含 2 个)会让
+  计数卡在 1、预热一直暂停到 120s 超时。改成直接取 `e.touches.length`(当前仍停留在屏幕
+  上的触摸点数),没有 `touches` 字段时按 0 处理。
+- `--perf-hud`:长帧明细拆出框架各阶段(`dart=(build/layout/paint/comp/…)`,入口包装经
+  `self.__mpFrameProf` 上报)、光栅化 `raster=`(并入 rAF 之后的异步光栅化)、文本桥
+  `tb=`/`setData=`、`resize=`;每个 GL program 一行 `[mp-perf] program`(编译耗时 +
+  attribute/uniform 摘要 + 源码哈希);着色器预热每画完一项打一行
+  `[mp-perf] shader-warmup item`,汇总行加 heavy/skipped 计数;有原生 `performance`
+  时用亚毫秒时钟。
+- 真机(iPhone 15)复测:长列表(A)最长帧 1061→97ms、>100ms 帧 2→0、fps 43→56;
+  大表单(E)>100ms 帧 6→4;冷启动 3.76→3.45s。详见
+  [`docs/capability-guide.md`](docs/capability-guide.md) 2.1 节。
+- `docs/capability-guide.md`:补充大表单 `itemExtent`/`prototypeItem`、优先 `hintText`、
+  长表单分步、iOS 光标常亮与如何恢复闪烁的指南。
+
 ## 0.2.2 — 2026-09-30
 
 新增仓库自带的真机压测页与测量工具,并把首批真机压测数据整理成一篇能力边界

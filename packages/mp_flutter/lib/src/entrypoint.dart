@@ -86,6 +86,16 @@ String entrypointImportFor(String projectPath, String packageName, String target
 /// createCjkBold),晚到的合一字体粗体经 `ui.loadFontFromList` 补注册——只有
 /// Dart 侧能让引擎注册字体并发 fontsChange。桥不存在(没带粗体)时什么也不做。
 ///
+/// 顺带(表单聚焦):iOS 目标平台下让 TextField 光标常亮,不跑 60fps 的淡入淡出
+/// 动画(见生成代码里 `_steadyCursorOnIOS` 的注释)。密码框聚焦期间临时恢复正常
+/// 闪烁(`self.__mpPasswordFocus`,text-bridge.js 在聚焦/失焦时通知),否则密码
+/// 最后一位明文字符会因为光标 tick 不再跑而一直不隐藏(I1)。
+///
+/// 顺带(--perf-hud):`self.__mpFrameProf` 存在时(只有 --perf-hud 承载页才挂),
+/// 绑定按帧把框架各阶段耗时(transient/build/layout/paint/合成/语义/帧后回调)与
+/// 视口度量变化次数报给它(runtime/perf-hud.js createFrameProf);不存在时各覆盖
+/// 直接走 super。
+///
 /// [targetImport] 是入口文件的 import URI(`package:` 形式或相对入口包装自身
 /// 的相对 import,见 [entrypointImportFor]);缺省(仅供单测直接调用本函数时
 /// 使用)按旧行为拼 `package:$packageName/main.dart`。
@@ -96,12 +106,15 @@ import 'dart:js_interop';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import '${targetImport ?? 'package:$packageName/main.dart'}' as app;
 
 void main() {
   _MpBinding();
   _listenLateFonts();
+  _steadyCursorOnIOS();
   final Function m = app.main;
   if (m is dynamic Function()) {
     m();
@@ -116,6 +129,149 @@ class _MpBinding extends WidgetsFlutterBinding {
   @override
   Widget wrapWithDefaultView(Widget rootWidget) =>
       super.wrapWithDefaultView(_MpSafeArea(child: rootWidget));
+
+  // ---- --perf-hud 帧分项(接收端 self.__mpFrameProf 不存在时全部直接走 super)----
+
+  @override
+  PipelineOwner createRootPipelineOwner() =>
+      _prof == null ? super.createRootPipelineOwner() : _ProfRootPipelineOwner();
+
+  @override
+  void handleBeginFrame(Duration? rawTimeStamp) {
+    if (_prof == null) return super.handleBeginFrame(rawTimeStamp);
+    final t0 = _t();
+    super.handleBeginFrame(rawTimeStamp);
+    _transient += _t() - t0;
+  }
+
+  @override
+  void drawFrame() {
+    if (_prof == null) return super.drawFrame();
+    _tDrawStart = _t();
+    super.drawFrame();
+    _tDrawEnd = _t();
+  }
+
+  @override
+  void handleMetricsChanged() {
+    _metrics++;
+    super.handleMetricsChanged();
+  }
+
+  @override
+  void handleDrawFrame() {
+    final prof = _prof;
+    if (prof == null) return super.handleDrawFrame();
+    _tDrawStart = _tDrawEnd = _tLayoutStart = _tLayoutEnd = _tBitsEnd = _tPaintEnd = _tSemStart = _tSemEnd = -1;
+    final t0 = _t();
+    super.handleDrawFrame();
+    final total = _t() - t0;
+    double span(double a, double b) => a >= 0 && b >= a ? b - a : 0;
+    final draw = span(_tDrawStart, _tDrawEnd);
+    final build = _tLayoutStart >= 0 ? span(_tDrawStart, _tLayoutStart) : draw;
+    final view = platformDispatcher.implicitView;
+    final inset = view == null ? 0.0 : view.viewInsets.bottom / view.devicePixelRatio;
+    prof.frame(
+      _transient.toJS, build.toJS, span(_tLayoutStart, _tLayoutEnd).toJS, span(_tLayoutEnd, _tBitsEnd).toJS,
+      span(_tBitsEnd, _tPaintEnd).toJS, span(_tPaintEnd, _tSemStart).toJS, span(_tSemStart, _tSemEnd).toJS,
+      span(_tSemEnd, _tDrawEnd).toJS, math.max(0.0, total - draw).toJS, _metrics.toJS, inset.toJS);
+    _transient = 0;
+    _metrics = 0;
+  }
+}
+
+@JS('__mpFrameProf')
+external _FrameProfBridge? get _frameProfBridge;
+
+extension type _FrameProfBridge._(JSObject _) implements JSObject {
+  external void frame(JSNumber transient, JSNumber build, JSNumber layout, JSNumber bits, JSNumber paint,
+      JSNumber comp, JSNumber sem, JSNumber fin, JSNumber post, JSNumber metrics, JSNumber inset);
+}
+
+// 帧分项计时(见 runtime/perf-hud.js createFrameProf):只有 --perf-hud 构建的承载页
+// 才在 main.dart.js 加载前挂上 self.__mpFrameProf;没有时下面这些都不会被用到
+final _FrameProfBridge? _prof = _frameProfBridge;
+final Stopwatch _clock = Stopwatch()..start();
+double _t() => _clock.elapsedMicroseconds / 1000.0;
+double _transient = 0;
+int _metrics = 0;
+double _tDrawStart = -1, _tDrawEnd = -1, _tLayoutStart = -1, _tLayoutEnd = -1;
+double _tBitsEnd = -1, _tPaintEnd = -1, _tSemStart = -1, _tSemEnd = -1;
+
+// 根 PipelineOwner 的计时版:与框架默认的 _DefaultRootPipelineOwner 一样不管理
+// rootNode(各 View 的子 owner 挂在它下面),只在四个 flush 前后打点
+final class _ProfRootPipelineOwner extends PipelineOwner {
+  _ProfRootPipelineOwner() : super(onSemanticsUpdate: (_) {});
+
+  @override
+  set rootNode(RenderObject? _) {}
+
+  @override
+  void flushLayout() {
+    _tLayoutStart = _t();
+    super.flushLayout();
+    _tLayoutEnd = _t();
+  }
+
+  @override
+  void flushCompositingBits() {
+    super.flushCompositingBits();
+    _tBitsEnd = _t();
+  }
+
+  @override
+  void flushPaint() {
+    super.flushPaint();
+    _tPaintEnd = _t();
+  }
+
+  @override
+  void flushSemantics() {
+    _tSemStart = _t();
+    super.flushSemantics();
+    _tSemEnd = _t();
+  }
+}
+
+// iOS 目标平台(按 UA 判定)下 TextField 的光标是淡入淡出动画(cursorOpacityAnimates
+// 默认 true):AnimationController 每个 vsync 都 tick,输入框聚焦期间应用一直以
+// 60fps 出帧,每帧都整屏合成 + 光栅化(Web 引擎没有局部重绘)。无 JIT 的 iOS 小程序
+// 上每帧几十 ms,聚焦后整页持续卡顿、打字跟手变差(模拟器实测:每次聚焦保持
+// 1.5s,共 429 帧)。这里让光标常亮不闪(EditableText.debugDeterministicCursor 在
+// release 下同样生效,只影响闪烁),聚焦后没有别的动画就不再出帧。安卓等平台的
+// 光标是 500ms 定时器切换(每秒 2 帧),不动。应用想要回闪烁光标:在 main() 里
+// 把 EditableText.debugDeterministicCursor 设回 false(入口包装先于 main() 设置)。
+//
+// I1 修复(密码框最后一位明文常驻):引擎 editable_text.dart 的
+// `_obscureShowCharTicksPending`(隐藏刚输入的那个字符前,短暂明文显示的计时)
+// 只在 `_onCursorTick` 里递减,而 `debugDeterministicCursor=true` 时
+// `_startCursorBlink` 直接 return,永远不建定时器、`_onCursorTick` 不会执行——
+// 密码框输完最后一个字符停下来,它会一直明文显示到下一次输入或失焦。
+// 这里听 `self.__mpPasswordFocus`(text-bridge.js 在检测到 `password:true` 的
+// 输入框聚焦/失焦时维护,见该文件 `createTextBridge` 里 `attach()`/blur 分支):
+// 密码框聚焦时临时把标志切回 false,失焦后恢复 true。改值当下不会立即生效,但
+// 用户在密码框里的下一次按键会经 `_didChangeTextEditingValue` 重新调用
+// `_startCursorBlink`(此时 `_cursorTimer` 仍是 null),从而真正建起定时器——
+// 足够在隐藏"当前正在打的这个字符"之前生效,不影响其余 iOS 输入框仍然光标常亮。
+void _steadyCursorOnIOS() {
+  if (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS) {
+    EditableText.debugDeterministicCursor = true;
+    final b = _passwordFocusBridge;
+    if (b != null) {
+      b.listen((() {
+        final obscure = b.obscure?.toDart ?? false;
+        EditableText.debugDeterministicCursor = !obscure;
+      }).toJS);
+    }
+  }
+}
+
+@JS('__mpPasswordFocus')
+external _PasswordFocusBridge? get _passwordFocusBridge;
+
+extension type _PasswordFocusBridge._(JSObject _) implements JSObject {
+  external JSBoolean? get obscure;
+  external JSFunction listen(JSFunction fn);
 }
 
 @JS('__mpLateFonts')

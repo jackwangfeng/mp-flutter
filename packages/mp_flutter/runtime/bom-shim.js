@@ -57,6 +57,12 @@ function withRecord(obj, name) {
 // ---------------------------------------------------------------------
 
 function makePerformance() {
+  // 宿主有原生 performance(开发者工具、安卓)就直接用:亚毫秒精度,Dart 的
+  // Stopwatch / --perf-hud 帧分项都靠它;真机 iOS 没有,退回 Date.now
+  if (typeof performance === 'object' && performance && typeof performance.now === 'function') {
+    const P = performance;
+    return { now() { return P.now(); }, timeOrigin: typeof P.timeOrigin === 'number' ? P.timeOrigin : Date.now() - P.now() };
+  }
   const start = Date.now();
   return {
     now() { return Date.now() - start; },

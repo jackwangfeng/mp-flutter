@@ -1,5 +1,5 @@
 'use strict';
-const { loadCanvasKit, routeImageElements } = require('./canvaskit-loader.js');
+const { loadCanvasKit, routeImageElements, acquireGlContext } = require('./canvaskit-loader.js');
 const { createNet, makeFetch } = require('./net.js');
 
 /**
@@ -152,6 +152,28 @@ function boot(opts) {
       };
       if (cjkBytes && memo) preparse(cjkBytes, 'cjk-font');
       if (cjkBold && memo) preparse(cjkBold.bytes, 'cjk-bold');
+      // 着色器预热(shader_warmup,默认开;见 shader-warmup.js):共享
+      // GrDirectContext + 首帧之后空闲时在离屏目标上把常见绘制组合各画一遍。
+      // 在下面的首帧钩子之前装:预热要拿到原始的 Surface.getCanvas/flush。
+      // pointerState:承载页在 onMpTouch 里维护(touchstart 计数、touchend/
+      // touchcancel/onHide 清零),shim 建好后挂到 shim.pointerState 上
+      // (下面 bom.install 之后)供页面写。这里先建对象、传引用给预热——手指
+      // 按下时(哪怕引擎这一刻还没因为按下就 flush)也要整体暂停,不抢交互。
+      const pointerState = { down: 0 };
+      if (opts.shaderWarmup !== false) {
+        try {
+          let warmFont = null;
+          if (cjkBytes) cjkBytes.then(function (b) { if (b) warmFont = b.buffer || b; }, function () {});
+          require('./shader-warmup.js').installShaderWarmup(CK, {
+            gl: acquireGlContext(canvas),
+            dpr: dpr,
+            typefaceData: function () { return warmFont; },
+            log: perfLog,
+            light: opts.shaderWarmupLight === true,
+            pointerState: pointerState,
+          });
+        } catch (e) { if (perfLog) perfLog('[mp-perf] shader-warmup 安装失败: ' + ((e && e.message) || e)); }
+      }
       // 首帧提交:包一次 Surface.prototype.flush,第一次调用时报阶段并立即
       // 还原(只报一次,不影响后续每帧真实的 flush 调用)。必须趁 CK 刚拿到、
       // 垫片/引擎都还没开始画之前包上,否则真机上首帧可能已经在这之前画完。
@@ -189,11 +211,19 @@ function boot(opts) {
         // 传对象可指定 { mode: 'file' | 'dataurl' }
         nativeImage: opts.nativeImage === false ? null : (opts.nativeImage || {}),
       });
+      // 承载页经 r.shim.pointerState 拿到,在 onMpTouch 里维护(见上面着色器预热)
+      shim.pointerState = pointerState;
       // 静态图解码:<img>.decode() 已在 wasm 里解好,纹理上传入口改走同一份结果(image.js)
       routeImageElements(CK, shim.images);
 
       shim.window.flutterCanvasKit = CK;
       shim.self.flutterCanvasKit = CK;
+      // --perf-hud(默认关):框架帧分项的接收端(perf-hud.js createFrameProf)。
+      // 入口包装在绑定初始化时读一次 self.__mpFrameProf,所以必须在 loadDart 之前挂上
+      // 没有 --perf-hud 时也显式挂 null:入口包装总会读一次,垫片对未定义的全局
+      // 会记成"触达未实现 API"(accept.js 的垫片覆盖基线)
+      shim.window.__mpFrameProf = opts.frameProf || null;
+      shim.self.__mpFrameProf = opts.frameProf || null;
 
       // 资源、网络、404 共用一个路由:package:http 走 fetch(url, init),
       // 引擎内部取字体等走 fetch(url);XHR(Task 2)也走同一路由
@@ -246,6 +276,18 @@ function boot(opts) {
       shim.window.__mpSafeArea = safeArea.bridge;
       shim.self.__mpSafeArea = safeArea.bridge;
       shim.safeArea = safeArea;
+
+      // 密码框聚焦状态(I1 修复,见 entrypoint.dart `_steadyCursorOnIOS` 与
+      // text-bridge.js `createPasswordFocusBridge` 的注释):同样必须在
+      // manifest.loadDart() 之前挂上——入口包装 main() 里注册监听时就要读到
+      // 这个全局。真正的通知者(文本桥,知道哪个聚焦元素是 password:true)是
+      // 承载页 boot 成功之后才创建的,创建时接过 shim.passwordFocus 复用同一个
+      // 对象(见 pipeline.dart)。
+      const { createPasswordFocusBridge } = require('./text-bridge.js');
+      const passwordFocus = createPasswordFocusBridge();
+      shim.window.__mpPasswordFocus = passwordFocus.bridge;
+      shim.self.__mpPasswordFocus = passwordFocus.bridge;
+      shim.passwordFocus = passwordFocus;
 
       // 原生视图同步层的门面(I1 修复,2026-09-27 终审):真正的
       // createNativeViews() 仍然是承载页 boot 成功之后才创建(需要真实

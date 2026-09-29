@@ -67,6 +67,8 @@ Future<SizeReport> runPipeline({
   List<String> privateInfos = const [],
   bool semanticsMirror = false,
   bool perfHud = false,
+  bool shaderWarmup = true,
+  bool shaderWarmupLight = false,
   List<String> dartDefines = const [],
   String? dartDefineFromFile,
   bool safeArea = true,
@@ -370,6 +372,7 @@ Future<SizeReport> runPipeline({
     'safe-area.js',
     'crypto.js',
     'boot.js',
+    'shader-warmup.js',
     'touch-bridge.js',
     'text-bridge.js',
     'native-views.js',
@@ -418,7 +421,8 @@ Future<SizeReport> runPipeline({
   // 承载页逻辑(见 buildHostPageJs)
   emitText('$_entryPage.js',
       buildHostPageJs(verify: verify, forcePlatform: forcePlatform, semanticsMirror: semanticsMirror,
-          perfHud: perfHud, bootStages: bootSubPackages.length + 4),
+          perfHud: perfHud, shaderWarmup: shaderWarmup, shaderWarmupLight: shaderWarmupLight,
+          bootStages: bootSubPackages.length + 4),
       'main');
 
   // 9. flutter_ohos 已知分叉差异 → 构建期警告(是 warning 不是 error,
@@ -490,6 +494,8 @@ String buildHostPageJs({
   String? forcePlatform,
   bool semanticsMirror = false,
   bool perfHud = false,
+  bool shaderWarmup = true,
+  bool shaderWarmupLight = false,
   int bootStages = 8,
 }) {
   if (forcePlatform != null) {
@@ -516,7 +522,13 @@ String buildHostPageJs({
       : '';
   final stageArg = ',\n        onStage: (stage) => { $perfHudStageArg'
       'this.mpBootStage(stage); }'
-      '${perfHud ? ',\n        perfLog: (line) => console.log(line)' : ''}';
+      '${perfHud ? ',\n        perfLog: (line) => console.log(line),\n        frameProf: __mpFrameProf' : ''}'
+      // shader_warmup(默认开,见 shader-warmup.js);关闭时显式告诉 boot 不装。
+      // shader_warmup_light:true 时只画轻项(文字/纯色/图片/圆/描边/路径…),
+      // 跳过阴影/模糊/颜色矩阵/混合这类真机上单个 program 可达上百 ms 的重项
+      // (见 shader-warmup.js buildCombos 的 heavy 标注),给低端机用。
+      ',\n        shaderWarmup: $shaderWarmup'
+      ',\n        shaderWarmupLight: $shaderWarmupLight';
   return '''
 Page({
   data: { mpError: '', mpInput: { visible: false }, mpNative: {}, mpNativeList: [], mpSemantics: [],
@@ -541,7 +553,21 @@ Page({
     this.setData(sp.visible ? { mpError: s, mpSplash: Object.assign({}, sp, { error: s }) } : { mpError: s });
     try { wx.showModal({ title: 'mp-flutter 启动失败', content: s.slice(0, 200), showCancel: false }); } catch (e) {}
   },
-  onMpTouch(e) { if (this.mpTouch) this.mpTouch.handle(e); },
+  onMpTouch(e) {
+    // 着色器预热(shader-warmup.js)靠这个数手指是否按着屏幕——哪怕引擎这一刻
+    // 还没因为按下就 flush(长按、手势识别中),也要让预热整体暂停,不抢交互。
+    // M4 修复:按事件次数 ±1 在多指触控下会卡住——两个手指分两次 touchstart
+    // 按下、一个 touchend(changedTouches 含 2 个)一起抬起时,down 会一直是 1。
+    // e.touches 是"当前仍停留在屏幕上的触摸点",直接取其长度,不按事件类型
+    // 累加/递减;没有 touches 字段(理论上不应该发生)时按 0 处理。
+    if (this.mpShim && this.mpShim.pointerState) {
+      this.mpShim.pointerState.down = e.touches ? e.touches.length : 0;
+    }
+    // M6 修复:开始触摸画布很可能紧接着有文本框几何/焦点变化(点击切换输入
+    // 框、拖动滚动等),轮询若已退避到 IDLE_POLL_MS,主动唤醒。
+    if (e.type === 'touchstart' && this.mpText) this.mpText.wake();
+    if (this.mpTouch) this.mpTouch.handle(e);
+  },
   onMpInput(e) {
     if (this.mpView) this.mpView.nativeInput(e.detail.value);
     if (this.mpText) this.mpText.nativeInput({ value: e.detail.value, cursor: e.detail.cursor });
@@ -562,8 +588,10 @@ Page({
   },
   onHide() {
     // 切到后台时所有正在按住的手指状态必然丢失(不会再收到 touchend/
-    // touchcancel),不清理会让引擎以为手指仍按着,回前台后行为错乱。
+    // touchcancel),不清理会让引擎以为手指仍按着,回前台后行为错乱;同理清零
+    // 着色器预热的 pointerState,否则回前台后预热会一直以为手指还按着。
     if (this.mpTouch) this.mpTouch.cancelAll();
+    if (this.mpShim && this.mpShim.pointerState) this.mpShim.pointerState.down = 0;
     // 后台不必每 16ms 轮询引擎输入元素
     if (this.mpText) this.mpText.pause();
   },
@@ -627,9 +655,21 @@ ${verify ? _consoleStateBufferSnippet : ''}
           try {
             const { createTextBridge, createViewSync } = require('../../text-bridge.js');
             // 视图同步负责"推送值等于页面旧数据时也要真正生效"(见 createViewSync)
-            this.mpView = createViewSync((patch, cb) => this.setData(patch, cb));
+            this.mpView = createViewSync((patch, cb) => this.setData(patch, cb)${perfHud ? _perfHudTextSetData : ''});
+            // passwordFocus:boot.js 在 loadDart 之前就挂了同一个对象(I1 修复,
+            // 见 text-bridge.js createPasswordFocusBridge 的注释),这里接过来
+            // 在聚焦/失焦密码框时通知入口包装
             this.mpText = createTextBridge({ shim: r.shim, cssWidth: info.windowWidth,
-              onState: (s) => this.mpView.apply(s) });
+              passwordFocus: r.shim.passwordFocus,
+              onState: (s) => this.mpView.apply(s)${perfHud ? ',\n              onStats: (ms) => { if (this.mpPerf) this.mpPerf.note(\'tb\', ms); }' : ''} });
+            // M6 修复:键盘高度变化很可能紧接着有文本框几何/焦点变化,轮询若
+            // 已退避到 IDLE_POLL_MS,主动唤醒避免窄窗口里同步滞后(见文件头
+            // IDLE_POLL_MS 注释)。旧基础库没有 onKeyboardHeightChange 时忽略。
+            try {
+              if (wx.onKeyboardHeightChange) {
+                wx.onKeyboardHeightChange(() => { if (this.mpText) this.mpText.wake(); });
+              }
+            } catch (e) { /* 旧基础库忽略 */ }
           } catch (e) { this.fail('文本输入桥初始化失败: ' + ((e && e.message) || e)); }
           try {
             const { createNativeViews } = require('../../native-views.js');
@@ -694,13 +734,19 @@ const _semanticsMirrorInitSnippet = '''
 /// 功能,不应该因为它失败就弹 `this.fail` 的用户可见弹窗)。
 const _perfHudBootTimerSnippet = '''
       let __mpBootTimer = null;
+      let __mpFrameProf = null;
       try {
-        const { createBootTimer } = require('../../perf-hud.js');
+        const { createBootTimer, createFrameProf } = require('../../perf-hud.js');
+        __mpFrameProf = createFrameProf();
         const app = getApp();
         __mpBootTimer = createBootTimer({ t0: (app && app.__mpBootT0) || Date.now() });
         __mpBootTimer.mark('onLoad');
       } catch (e) { console.error('[mp-perf] 启动计时初始化失败: ' + ((e && e.message) || e)); }
 ''';
+
+/// --perf-hud(默认关):文本桥的 setData 计时——同步部分(序列化 + 投递给视图层)
+/// 的耗时与负载字节数进帧明细(`tb=`、`setData=次数/字节`),拆"聚焦卡顿"用。
+const _perfHudTextSetData = ''', (patch, ms) => { if (this.mpPerf) { let n = 0; try { n = JSON.stringify(patch).length; } catch (e) {} this.mpPerf.note('setData', ms, n); } }''';
 
 /// --perf-hud(默认关):boot 成功后启动稳态性能采样(fps/帧耗时/gl 调用/
 /// 图片解码/长任务,每秒一行 `[mp-perf]`,外加左上角浮层)。同 WXML 伴生层
@@ -716,8 +762,11 @@ const _perfHudInitSnippet = '''
               images: r.shim.images, fetchHosts: [r.shim.window, r.shim.self],
               typefaceMemo: r.shim.typefaceMemo,
               fontInfo: { cjkBold: r.shim.cjkBold, fetch: r.shim.window && r.shim.window.fetch },
+              frameProf: __mpFrameProf,
               setData: (patch, cb) => this.setData(patch, cb) });
             this.mpPerf.start();
+            // 窗口尺寸变化(键盘顶起页面、横竖屏)计入帧明细的 resize=
+            try { if (wx.onWindowResize) wx.onWindowResize(() => { if (this.mpPerf) this.mpPerf.note('resize'); }); } catch (e) { /* 忽略 */ }
           } catch (e) { console.error('[mp-perf] 初始化失败: ' + ((e && e.message) || e)); }
 ''';
 

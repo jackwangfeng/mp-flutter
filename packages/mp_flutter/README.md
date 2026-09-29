@@ -60,6 +60,8 @@ dart run mp_flutter doctor
 | `--private-info=<接口名>` | 声明用户隐私接口(写入 `app.json` 的 `requiredPrivateInfos`),可重复。取值:`getFuzzyLocation`/`getLocation`/`onLocationChange`/`startLocationUpdate`/`startLocationUpdateBackground`/`chooseAddress`/`choosePoi`/`chooseLocation`。定位类接口(除 `chooseAddress` 外)会自动带上 `permission.scope.userLocation`;`getLocation`/`getFuzzyLocation` 不能同时声明 |
 | `--semantics-mirror` | 开启 WXML 伴生层(语义树镜像),默认关闭 |
 | `--perf-hud` | 开启真机性能测量(`[mp-perf]`/`[mp-boot]` 控制台日志 + 左上角浮层),默认关闭。见下方「真机性能测量」 |
+| `--no-shader-warmup` | 关闭着色器预热(默认开):首帧之后趁空闲,在引擎的 GrDirectContext 上把常见绘制组合各画一遍,让 GL program 提前编译,首次进入列表/卡片页时不再当帧编译(iOS 无 JIT 时单个 program 百 ms 级)。不占冷启动,有动画/滚动/触摸时暂停;轻项一片最多攒 8ms,阴影/模糊等重项拆到最细粒度、要求连续空闲 1s 才画、每片一个 |
+| `--shader-warmup-light` | 着色器预热只画轻项(文字/纯色/图片/圆/描边/路径等),跳过阴影/`BoxShadow`/`BackdropFilter`/颜色矩阵等重项(真机上单个 program 可达上百 ms)。默认关闭,对 `--no-shader-warmup` 无效 |
 | `--no-licenses` | 不打包第三方许可证全文(`assets/NOTICES`,换成空占位),默认打包(放在按需分包,只在打开许可证页时下载)。见根 README「包体积与冷启动」 |
 | `--cjk-font=level1\|full` / `--no-cjk-font` | 常用汉字合一字体(Noto Sans SC 子集,brotli 后放独立分包 `pkg-cjk`,启动时直接读文件):`full`(默认)= GB2312 一二级字 + 标点/全角/Latin-1/常用符号,约 1.15MB,真机实测不在首帧关键路径上;`level1` = 仅一级字,约 650KB,但服务端下发文案命中二级字/常用符号时会多一次回退分片下载与整体重排。首屏中文不再逐片下载回退字体、不再因字体到达整体重排;字表外的字仍按需下载分片。取舍见根 README「包体积与冷启动」 |
 | `--cjk-font-bold=level1\|full\|false` | 合一字体的粗体(Noto Sans SC Bold 子集,同一 family、字重 700,独立分包 `pkg-cjkb`,不挡首帧)。默认跟随 `--cjk-font`,必须同档;`false` = 不带,w600 以上的中文由 CanvasKit 合成加粗(无 JIT 时每段首次排版约贵 4 倍)。见根 README「合一字体粗体」 |
@@ -84,6 +86,8 @@ require_location: true
 private_infos: [chooseLocation, choosePoi]   # 与 --private-info 合并去重
 semantics_mirror: false
 perf_hud: false
+shader_warmup: true            # 首帧后空闲时预热着色器(同 --no-shader-warmup 关闭)
+# shader_warmup_light: true     # 预热只画轻项、跳过重项(同 --shader-warmup-light)
 safe_area: true
 licenses: true                 # false = 不打包 NOTICES(同 --no-licenses)
 cjk_font: full                  # full(默认)/ level1 / false,同 --cjk-font / --no-cjk-font
@@ -134,6 +138,27 @@ dart run mp_flutter --perf-hud
   - `longTasks`:一帧耗时超过 50ms 的次数
   - `dart~=<耗时>ms(est)`:粗略估算的 Dart/框架耗时(帧总耗时减去 gl 耗时、
     减去按帧均摊的 decode 耗时),**是估算值,不是精确归因**
+  - `shader=<次数>/<ms>`、`programs=<累计个数>/<ms>`:着色器编译相关 gl 调用与
+    累计编译的 GL program。每个 program 另打一行 `[mp-perf] program #n <ms>
+    <源码哈希> attrs=<顶点属性> unis=<片元 uniform>`,用来认出是哪种绘制组合
+    (圆角裁剪 `uinnerRect,uradiusPlusHalf`、高斯模糊 `uoffsetsAndKernel`、渐变
+    `ustart,uend`…);着色器预热每画完一项打一行 `[mp-perf] shader-warmup item
+    <名称> <ms> [heavy]`,结束打一行 `[mp-perf] shader-warmup done
+    combos=<组> busy=<占用主线程 ms> maxSlice=<单次最长 ms> elapsed=<ms>
+    heavy=<画过的重项数> skipped=<light 模式跳过的重项数>`
+- 超过 50ms 的帧打一行 `long-frame`,两帧间隔超过 100ms 且主线程确实被占住时
+  打一行 `gap`(帧外)。`long-frame` 的分项(需要入口包装,即默认的
+  `--safe-area`):
+  - `dart=<总>(transient 动画回调, build, layout 布局, bits, paint, comp 合成,
+    sem 语义, fin, post 帧后回调)`:框架各阶段,入口包装经 `self.__mpFrameProf`
+    每帧报一次;`metrics=N` 本帧前视口度量变化次数、`inset=` 当前
+    `viewInsets.bottom`
+  - `raster=`:引擎光栅化(Surface.getCanvas → flush;引擎的渲染是异步的,常
+    落在 rAF 回调返回后的微任务里,并入当前帧)
+  - 竖线后是分项参考(与上面有重叠,不再单独扣):`shader`/`upload`/`decode`/
+    `layout`(段落排版)/`tb`(文本输入桥轮询与 setData 同步部分)/
+    `setData=次数/字节`/`resize=`(窗口尺寸变化事件)
+  - `other=` 帧耗时减去框架各阶段与光栅化
 - 冷启动阶段耗时:每个阶段结束打一行
   `[mp-boot] <阶段名> +<距 App onLaunch 的毫秒>ms (<本阶段耗时毫秒>ms)`,
   阶段依次是页面 `onLoad`、各分包 `subpackage:<分包名>`(`require.async`

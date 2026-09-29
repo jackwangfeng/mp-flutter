@@ -108,6 +108,8 @@ const kKnownConfigKeys = <String>{
   'target',
   'perf_hud',
   'licenses',
+  'shader_warmup',
+  'shader_warmup_light',
   'cjk_font',
   'cjk_font_bold',
   'font_base_url',
@@ -161,6 +163,11 @@ class MpFlutterConfig {
   final String? target;
   final bool? perfHud;
   final bool? licenses;
+  /// `shader_warmup`:首帧后空闲预热(默认 true)。null = 未配置。
+  final bool? shaderWarmup;
+  /// `shader_warmup_light`:true 时预热只画轻项,跳过阴影/模糊/颜色矩阵/混合
+  /// 这类真机上单个 program 可达上百 ms 的重项(默认 false)。null = 未配置。
+  final bool? shaderWarmupLight;
   /// `cjk_font`:'level1' / 'full' / 'false'(true 视为 full,与默认值一致)。null = 未配置。
   final String? cjkFont;
   /// `cjk_font_bold`:'level1' / 'full' / 'false'。null = 未配置(或写 true),跟随 cjk_font。
@@ -182,6 +189,8 @@ class MpFlutterConfig {
     this.target,
     this.perfHud,
     this.licenses,
+    this.shaderWarmup,
+    this.shaderWarmupLight,
     this.cjkFont,
     this.cjkFontBold,
     this.fontBaseUrl,
@@ -329,6 +338,8 @@ MpFlutterConfig loadConfig(
     target: asString('target'),
     perfHud: asBool('perf_hud'),
     licenses: asBool('licenses'),
+    shaderWarmup: asBool('shader_warmup'),
+    shaderWarmupLight: asBool('shader_warmup_light'),
     cjkFont: asCjkLevel('cjk_font'),
     cjkFontBold: asCjkBoldLevel('cjk_font_bold'),
     fontBaseUrl: asString('font_base_url'),

@@ -16,18 +16,28 @@ import 'stress_flags.dart';
 class StressRunner {
   const StressRunner._();
 
-  static final List<Widget Function(int pushStartMs)> _builders = [
-    (t) => StressCaseA(pushStartMs: t),
-    (t) => StressCaseB(pushStartMs: t),
-    (t) => StressCaseC(pushStartMs: t),
-    (t) => StressCaseD(pushStartMs: t),
-    (t) => StressCaseE(pushStartMs: t),
-    (t) => StressCaseF(pushStartMs: t),
-    (t) => StressCaseG(pushStartMs: t),
-  ];
+  static final Map<String, Widget Function(int pushStartMs)> _builders = {
+    'A': (t) => StressCaseA(pushStartMs: t),
+    'B': (t) => StressCaseB(pushStartMs: t),
+    'C': (t) => StressCaseC(pushStartMs: t),
+    'D': (t) => StressCaseD(pushStartMs: t),
+    'E': (t) => StressCaseE(pushStartMs: t),
+    'F': (t) => StressCaseF(pushStartMs: t),
+    'G': (t) => StressCaseG(pushStartMs: t),
+  };
+
+  /// `--dart-define=STRESS_ONLY=AE`:只跑列出的项(字母),调试单项时省时间;
+  /// 缺省跑全部。
+  static const String _only = String.fromEnvironment('STRESS_ONLY', defaultValue: '');
 
   static Future<void> run(BuildContext context) async {
-    for (final builder in _builders) {
+    final builders = _builders.entries
+        .where((e) => _only.isEmpty || _only.toUpperCase().contains(e.key))
+        .map((e) => e.value);
+    if (StressConfig.startDelay > Duration.zero) {
+      await Future.delayed(StressConfig.startDelay);
+    }
+    for (final builder in builders) {
       if (!context.mounted) return;
       final pushStartMs = DateTime.now().millisecondsSinceEpoch;
       await Navigator.of(context).push(MaterialPageRoute(builder: (_) => builder(pushStartMs)));

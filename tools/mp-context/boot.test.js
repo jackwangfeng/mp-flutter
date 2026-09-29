@@ -25,12 +25,14 @@ async function runBoot(bootOpts, deviceInfo, windowInfo) {
   // main.dart.js/业务代码可能在模块顶层就读取 self.__mpWechat。
   let wechatBeforeLoadDart;
   let safeAreaBeforeLoadDart;
+  let passwordFocusBeforeLoadDart;
   const manifest = {
     subPackages: {},
     assets: {},
     loadDart: () => {
       wechatBeforeLoadDart = c.run('typeof self !== "undefined" && self.__mpWechat != null');
       safeAreaBeforeLoadDart = c.run('typeof self !== "undefined" && self.__mpSafeArea != null ? JSON.stringify([self.__mpSafeArea.top, self.__mpSafeArea.bottom]) : null');
+      passwordFocusBeforeLoadDart = c.run('typeof self !== "undefined" && self.__mpPasswordFocus != null ? self.__mpPasswordFocus.obscure : null');
       c.requireModule(path.join(RT, 'bom-shim.js')).self._flutter.loader.didCreateEngineInitializer({
         initializeEngine(cfg) { config = cfg; return Promise.resolve({ runApp() { return Promise.resolve(); } }); },
       });
@@ -38,7 +40,7 @@ async function runBoot(bootOpts, deviceInfo, windowInfo) {
     },
   };
   const r = await boot(Object.assign({ canvas: c.canvas, manifest, cssWidth: 390, cssHeight: 844 }, bootOpts));
-  return { config, ua: r.shim.window.navigator.userAgent, CK, shim: r.shim, wechatBeforeLoadDart, safeAreaBeforeLoadDart };
+  return { config, ua: r.shim.window.navigator.userAgent, CK, shim: r.shim, wechatBeforeLoadDart, safeAreaBeforeLoadDart, passwordFocusBeforeLoadDart };
 }
 
 test('initializeEngine 强制多画布光栅器(渲染器不随 UA 走 OffscreenCanvas),且限定单画布(平台视图黑屏修复)', async () => {
@@ -133,6 +135,16 @@ test('K1:loadDart 之前 self.__mpSafeArea 已按 wx.getWindowInfo 的安全区�
   });
   assert.strictEqual(safeAreaBeforeLoadDart, '[47,34]');
   assert.strictEqual(shim.window.__mpSafeArea, shim.self.__mpSafeArea);
+});
+
+// I1 修复:入口包装的 _steadyCursorOnIOS 在 main() 里注册监听时要读到
+// self.__mpPasswordFocus,同 __mpWechat/__mpSafeArea 一样必须在 loadDart 之前挂上。
+test('I1:loadDart 之前 self.__mpPasswordFocus 已挂上(初始 obscure=false),shim.passwordFocus 供文本桥接管', async () => {
+  const { passwordFocusBeforeLoadDart, shim } = await runBoot({});
+  assert.strictEqual(passwordFocusBeforeLoadDart, false, 'manifest.loadDart() 被调用时 self.__mpPasswordFocus 应已存在且初始为未聚焦密码框');
+  assert.strictEqual(shim.window.__mpPasswordFocus, shim.self.__mpPasswordFocus);
+  assert.strictEqual(typeof shim.passwordFocus.set, 'function', '文本桥接管靠 shim.passwordFocus.set(bool)');
+  assert.strictEqual(typeof shim.window.__mpPasswordFocus.listen, 'function');
 });
 
 // K4:crypto.getRandomValues 播种是 boot() 链路里唯一的异步步骤,必须在

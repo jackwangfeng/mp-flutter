@@ -35,6 +35,12 @@ class StressConfig {
   /// 期间没有帧,测试侧改用有限次数的 `pump(小步长)` 轮询,见冒烟测试)。
   static Duration betweenCasesDelay = const Duration(seconds: 1);
 
+  /// 首页首帧之后、开始第一项之前的等待。真机默认 3s——模拟用户先看一眼首页
+  /// 再点进列表(运行时的着色器预热只在空闲时进行,见 mp_flutter
+  /// runtime/shader-warmup.js;不留这段空闲,A 项测到的就是"启动瞬间就进列表"
+  /// 的最坏情况)。冒烟测试里调成 0。
+  static Duration startDelay = const Duration(seconds: 3);
+
   /// B/A 里网络图片的 [ImageProvider] 构造方式。默认真去请求 [StressImgConfig]
   /// 算出的 URL;冒烟 widget test 会替换成不发真实网络请求的内存图片
   /// (`flutter test` 环境里发真实 HTTP 请求既慢又可能因为没有网络而挂起,
@@ -53,6 +59,7 @@ class StressConfig {
     cardCount = 40;
     scrollSpeedPxPerSec = 3000;
     betweenCasesDelay = const Duration(seconds: 1);
+    startDelay = const Duration(seconds: 3);
     buildImage = (url) => NetworkImage(url);
   }
 }

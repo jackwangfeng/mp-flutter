@@ -5,7 +5,7 @@ const { createMpContext } = require('./context');
 
 const RT = path.resolve(__dirname, '../../packages/mp_flutter/runtime');
 
-function setup() {
+function setup(extra) {
   const c = createMpContext();
   const bom = c.requireModule(path.join(RT, 'bom-shim.js'));
   const shim = bom.install({ canvas: c.canvas, width: 390, height: 844, dpr: 3 });
@@ -13,7 +13,7 @@ function setup() {
   shim.document.body.append(host);
   const states = [];
   const { createTextBridge } = c.requireModule(path.join(RT, 'text-bridge.js'));
-  const bridge = createTextBridge({ shim, cssWidth: 390, onState: (s) => states.push(s) });
+  const bridge = createTextBridge(Object.assign({ shim, cssWidth: 390, onState: (s) => states.push(s) }, extra || {}));
   // 模拟引擎:建 input、挂到 host、给几何、聚焦
   function engineInput(tag = 'input') {
     const el = shim.document.createElement(tag);
@@ -494,5 +494,89 @@ test('暂停期间发生的焦点切换不启动定时器,resume 后才轮询', 
   assert.strictEqual(states.length, n);
   bridge.resume();
   assert.strictEqual(last().width, 100);
+  bridge.dispose();
+});
+
+// ---- I1 修复:密码框聚焦/失焦通知 Dart 侧(entrypoint.dart _steadyCursorOnIOS) ----
+test('I1:密码框聚焦时 passwordFocus.set(true),失焦后 set(false)', async () => {
+  const c = createMpContext();
+  const { createPasswordFocusBridge } = c.requireModule(path.join(RT, 'text-bridge.js'));
+  const passwordFocus = createPasswordFocusBridge();
+  const notified = [];
+  passwordFocus.bridge.listen(() => notified.push(passwordFocus.bridge.obscure));
+  const { bridge, engineInput } = setup({ passwordFocus });
+  const { el } = engineInput();
+  el.type = 'password';
+  el.focus();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.strictEqual(passwordFocus.bridge.obscure, true);
+  el.blur();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.strictEqual(passwordFocus.bridge.obscure, false);
+  assert.deepStrictEqual(notified, [true, false]);
+  bridge.dispose();
+});
+
+test('I1:非密码框聚焦不置位 obscure;焦点从密码框切到非密码框时置回 false', async () => {
+  const c = createMpContext();
+  const { createPasswordFocusBridge } = c.requireModule(path.join(RT, 'text-bridge.js'));
+  const passwordFocus = createPasswordFocusBridge();
+  const { bridge, engineInput } = setup({ passwordFocus });
+  const plain = engineInput();
+  plain.el.focus();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.strictEqual(passwordFocus.bridge.obscure, false);
+  const pw = engineInput();
+  pw.el.type = 'password';
+  pw.el.focus();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.strictEqual(passwordFocus.bridge.obscure, true);
+  plain.el.focus();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.strictEqual(passwordFocus.bridge.obscure, false);
+  bridge.dispose();
+});
+
+test('I1:dispose() 时把 obscure 置回 false(不留下"密码框仍聚焦"的残留状态)', async () => {
+  const c = createMpContext();
+  const { createPasswordFocusBridge } = c.requireModule(path.join(RT, 'text-bridge.js'));
+  const passwordFocus = createPasswordFocusBridge();
+  const { bridge, engineInput } = setup({ passwordFocus });
+  const { el } = engineInput();
+  el.type = 'password';
+  el.focus();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.strictEqual(passwordFocus.bridge.obscure, true);
+  bridge.dispose();
+  assert.strictEqual(passwordFocus.bridge.obscure, false);
+});
+
+// ---- M6 修复:轮询退避后可被主动唤醒(touchstart / 键盘高度变化) ----
+test('M6:wake() 在空闲退避后把轮询立刻拉回逐帧间隔', async () => {
+  let ticks = 0;
+  const { bridge, engineInput } = setup({ onStats: () => { ticks++; } });
+  const { el } = engineInput();
+  el.focus();
+  await new Promise((r) => setTimeout(r, 700));      // 过了活跃期,退到 IDLE_POLL_MS
+  ticks = 0;
+  bridge.wake();
+  await new Promise((r) => setTimeout(r, 200));
+  assert.ok(ticks >= 6, 'wake() 后应回到逐帧轮询,实际 ' + ticks);
+  bridge.dispose();
+});
+
+test('轮询自适应:聚焦后 500ms 内没有变化,轮询从 16ms 退到 100ms;原生输入立刻回到逐帧', async () => {
+  let ticks = 0;
+  const { bridge, engineInput } = setup({ onStats: () => { ticks++; } });
+  const { el } = engineInput();
+  el.focus();
+  await new Promise((r) => setTimeout(r, 700));      // 过了活跃期
+  ticks = 0;
+  await new Promise((r) => setTimeout(r, 500));
+  assert.ok(ticks <= 7, '空闲期约每 100ms 一次,实际 ' + ticks);
+  bridge.nativeInput({ value: 'x', cursor: 1 });
+  ticks = 0;
+  await new Promise((r) => setTimeout(r, 200));
+  assert.ok(ticks >= 6, '原生输入后回到逐帧轮询,实际 ' + ticks);
   bridge.dispose();
 });

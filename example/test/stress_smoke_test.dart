@@ -38,6 +38,7 @@ void main() {
     StressConfig.cardCount = 6;
     StressConfig.scrollSpeedPxPerSec = 200000;
     StressConfig.betweenCasesDelay = Duration.zero;
+    StressConfig.startDelay = Duration.zero;
     final memoryImage = MemoryImage(Uint8List.fromList(_kTinyPng));
     StressConfig.buildImage = (url) => memoryImage;
     addTearDown(StressConfig.resetToDefaults);

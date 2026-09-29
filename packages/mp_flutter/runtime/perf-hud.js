@@ -91,17 +91,147 @@ const HEARTBEAT_MS = 50;
 const TEXT_DETAIL_MS = 8;
 
 /** 分项计时的类别(长帧/间隔明细与每秒汇总共用)。 */
-const CATS = ['decode', 'native', 'scale2d', 'upload', 'shader', 'fontParse', 'layout'];
+// tb:文本输入桥(text-bridge.js)的轮询/状态计算 + 承载页 setData 同步耗时
+// (承载页经 hud.note 报进来,见 pipeline.dart 的 --perf-hud 片段)
+const CATS = ['decode', 'native', 'scale2d', 'upload', 'shader', 'fontParse', 'layout', 'tb'];
 function emptyAcc() {
   const a = {};
   CATS.forEach(function (k) { a[k] = 0; });
   a.fakeBold = 0;   // 计数(不是耗时):本帧 build 的合成加粗段落数,见 wrapFakeBold
+  a.setData = 0;    // 计数:文本桥发出的 setData 次数
+  a.setDataBytes = 0;
+  a.resize = 0;     // 计数:垫片派发的 resize 事件 / 引擎视口度量变化
   return a;
 }
 function accText(acc) {
   return CATS.filter(function (k) { return acc[k] >= 0.05; })
     .map(function (k) { return k + '=' + acc[k].toFixed(1); }).join(' ') +
-    (acc.fakeBold ? ' fakeBold=' + acc.fakeBold : '');
+    (acc.fakeBold ? ' fakeBold=' + acc.fakeBold : '') +
+    (acc.setData ? ' setData=' + acc.setData + '/' + acc.setDataBytes + 'B' : '') +
+    (acc.resize ? ' resize=' + acc.resize : '');
+}
+
+/**
+ * 框架帧分项(入口包装经 `self.__mpFrameProf.frame(...)` 每帧报一次,见
+ * entrypoint.dart 的 _MpBinding):transient(动画/Ticker 回调)、build、
+ * layout(RenderObject 布局,不是段落排版)、bits(合成位)、paint、comp
+ * (Layer 树 → Scene,含 view.render 同步部分)、sem(语义)、fin(finalizeTree)、
+ * post(帧后回调)、metrics(自上一帧以来 handleMetricsChanged 次数)、inset
+ * (当前 viewInsets.bottom,逻辑像素)。
+ */
+const DART_KEYS = ['transient', 'build', 'layout', 'bits', 'paint', 'comp', 'sem', 'fin', 'post'];
+function createFrameProf() {
+  let last = null;
+  return {
+    frame: function (transient, build, layout, bits, paint, comp, sem, fin, post, metrics, inset) {
+      const d = { transient: +transient || 0, build: +build || 0, layout: +layout || 0, bits: +bits || 0,
+        paint: +paint || 0, comp: +comp || 0, sem: +sem || 0, fin: +fin || 0, post: +post || 0,
+        metrics: +metrics || 0, inset: +inset || 0 };
+      if (last) {   // 同一 rAF 回调里报了两次(极少见):累加
+        DART_KEYS.forEach(function (k) { d[k] += last[k]; });
+        d.metrics += last.metrics;
+      }
+      last = d;
+    },
+    take: function () { const d = last; last = null; return d; },
+  };
+}
+function dartTotal(d) {
+  let t = 0;
+  DART_KEYS.forEach(function (k) { t += d[k]; });
+  return t;
+}
+function dartText(d) {
+  return 'dart=' + dartTotal(d).toFixed(1) + '(' + DART_KEYS.filter(function (k) { return d[k] >= 0.05; })
+    .map(function (k) { return k + ' ' + d[k].toFixed(1); }).join(', ') + ')' +
+    (d.metrics ? ' metrics=' + d.metrics : '') + (d.inset ? ' inset=' + d.inset.toFixed(0) : '');
+}
+
+/** 32 位 FNV-1a,十六进制。 */
+function fnv(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return ('0000000' + h.toString(16)).slice(-8);
+}
+
+/**
+ * 着色器程序摘要(定位"首次编译的是哪种 program",加进预热清单用):顶点着色器
+ * 的 attribute 名认出几何处理器(inPosition/inCircleEdge/inTextureCoords…),
+ * 片元着色器的 uniform 名认出片元处理器(矩形/圆角裁剪、渐变、模糊、纹理…),
+ * 再加一个源码哈希区分同名不同变体。
+ */
+function programDigest(vs, fs) {
+  const pick = function (src, re) {
+    const out = [];
+    let m;
+    re.lastIndex = 0;
+    while ((m = re.exec(src || '')) !== null) if (out.indexOf(m[1]) < 0) out.push(m[1]);
+    return out;
+  };
+  const attrs = pick(vs, /\b(?:attribute|in)\s+(?:(?:highp|mediump|lowp)\s+)?\w+\s+(\w+)\s*;/g);
+  const unis = pick(fs, /\buniform\s+(?:(?:highp|mediump|lowp)\s+)?\w+\s+(\w+)/g)
+    .map(function (n) { return n.replace(/_S\d+(_c\d+)*$/, ''); });
+  return { hash: fnv(String(vs) + '\u0000' + String(fs)), attrs: attrs, unis: unis };
+}
+
+/**
+ * 记录每个 program 的着色器源码与编译总耗时(shaderSource→compileShader→
+ * linkProgram→查询状态都算进去),每个 program 打一行 `[mp-perf] program`。
+ * 次数少(一个会话几十个),总是打。
+ */
+function trackPrograms(gl, state, log) {
+  const src = new Map();
+  const attached = new Map();
+  const wrap = function (name, after) {
+    const orig = gl[name];
+    if (typeof orig !== 'function') return;
+    try {
+      gl[name] = function () {
+        const r = orig.apply(gl, arguments);
+        try { after(arguments, r); } catch (e) { /* 诊断失败不影响调用 */ }
+        return r;
+      };
+    } catch (e) { /* 只读 */ }
+  };
+  const flushPending = function () {
+    const p = state.progPending;
+    if (!p) return;
+    state.progPending = null;
+    state.programCount++;
+    const ms = state.progMs;
+    state.progMs = 0;
+    state.programMs += ms;
+    const d = p.digest;
+    try {
+      log('[mp-perf] program #' + state.programCount + ' ' + ms.toFixed(1) + 'ms ' + d.hash +
+        ' attrs=' + d.attrs.join(',') + ' unis=' + d.unis.join(',').slice(0, 260));
+    } catch (e) { /* 忽略 */ }
+  };
+  state.flushProgram = flushPending;
+  wrap('shaderSource', function (a) {
+    // 新 program 开始编译:结算上一个
+    if (state.progPending) flushPending();
+    src.set(a[0], String(a[1]));
+  });
+  wrap('attachShader', function (a) {
+    const l = attached.get(a[0]) || [];
+    l.push(a[1]);
+    attached.set(a[0], l);
+  });
+  wrap('linkProgram', function (a) {
+    const sh = attached.get(a[0]) || [];
+    let vs = '', fs = '';
+    sh.forEach(function (x) {
+      const t = src.get(x) || '';
+      if (/gl_Position/.test(t)) vs = t; else fs = t;
+    });
+    state.progPending = { digest: programDigest(vs, fs) };
+  });
+  wrap('deleteShader', function (a) { src.delete(a[0]); });
+  wrap('deleteProgram', function (a) { attached.delete(a[0]); });
 }
 
 /**
@@ -426,6 +556,7 @@ function wrapCanvasRaf(canvas, state, now, log) {
         state.acc = emptyAcc();
       }
       state.inFrame = true;
+      state.rasterInFrame = 0;
       try {
         return cb(ts);
       } finally {
@@ -436,6 +567,12 @@ function wrapCanvasRaf(canvas, state, now, log) {
         cur.dur += end - start;
         cur.inside = addAcc(cur.inside || emptyAcc(), state.acc);
         state.acc = emptyAcc();
+        if (state.rasterInFrame) cur.rasterIn = (cur.rasterIn || 0) + state.rasterInFrame;
+        const fp = state.frameProf && state.frameProf.take();
+        if (fp) {
+          if (cur.dart) { DART_KEYS.forEach(function (k) { cur.dart[k] += fp[k]; }); cur.dart.metrics += fp.metrics; }
+          else cur.dart = fp;
+        }
         // 引擎常只注册一个回调:不等下一帧,若 ts 不可用(不能归并)立即结算
         if (!(typeof ts === 'number' && ts > 0)) finishFrame(state, log);
       }
@@ -447,7 +584,57 @@ function wrapCanvasRaf(canvas, state, now, log) {
 function addAcc(a, b) {
   CATS.forEach(function (k) { a[k] += b[k]; });
   a.fakeBold += b.fakeBold;
+  a.setData += b.setData;
+  a.setDataBytes += b.setDataBytes;
+  a.resize += b.resize;
   return a;
+}
+
+/**
+ * 光栅化(引擎 rasterizeToCanvas:Surface.getCanvas → 画 Scene → Surface.flush)
+ * 计时。引擎的渲染是异步的(renderScene 里有 await),光栅化常落在 rAF 回调
+ * 返回之后的微任务里——不补这一段,帧耗时只含框架的同步部分,光栅化(含首次
+ * 着色器编译)全被记成"帧外"。flush 发生在回调结束之后、下一帧之前时,把
+ * getCanvas→flush 这段并入当前帧(raster=),期间的分项(shader/upload…)也
+ * 算帧内。
+ */
+function wrapRaster(CK, state, now) {
+  const proto = CK.Surface && CK.Surface.prototype;
+  if (!proto) return;
+  const origGet = proto.getCanvas;
+  const origFlush = proto.flush;
+  if (typeof origGet === 'function') {
+    proto.getCanvas = function () {
+      if (state.rasterStart == null) {
+        state.rasterStart = now();
+        // 回调结束到光栅开始之间零星的帧外工作不并入
+        if (!state.inFrame && state.cur) state.acc = emptyAcc();
+      }
+      return origGet.apply(this, arguments);
+    };
+  }
+  if (typeof origFlush === 'function') {
+    proto.flush = function () {
+      const r = origFlush.apply(this, arguments);
+      const t = now();
+      const start = state.rasterStart;
+      state.rasterStart = null;
+      if (start != null) {
+        const ms = t - start;
+        const cur = state.cur;
+        if (state.inFrame) {
+          state.rasterInFrame += ms;
+        } else if (cur && cur.inside) {
+          cur.dur += ms;
+          cur.raster = (cur.raster || 0) + ms;
+          cur.inside = addAcc(cur.inside, state.acc);
+          state.acc = emptyAcc();
+          state.lastFrameEnd = t;
+        }
+      }
+      return r;
+    };
+  }
 }
 
 /** 结算当前帧(下一帧开始时、report() 时、或不能归并的回调结束时)。 */
@@ -462,13 +649,23 @@ function finishFrame(state, log) {
   if (dur > LONG_TASK_MS) {
     state.longTasks++;
     let known = 0;
-    CATS.forEach(function (k) { known += inside[k]; });
+    let breakdown = '';
+    const raster = (cur.raster || 0) + (cur.rasterIn || 0);
+    if (cur.dart) {
+      // 有框架分项时:other = 帧耗时 - 框架各阶段 - 光栅化(段落排版/着色器等
+      // 已含在这两者里,单列只作参考,不重复扣)
+      known = dartTotal(cur.dart) + raster;
+      breakdown = dartText(cur.dart) + ' raster=' + raster.toFixed(1) + ' | ';
+    } else {
+      CATS.forEach(function (k) { known += inside[k]; });
+    }
     try {
-      log('[mp-perf] long-frame ' + dur.toFixed(1) + 'ms ' + accText(inside) +
+      log('[mp-perf] long-frame ' + dur.toFixed(1) + 'ms ' + breakdown + accText(inside) +
         (state.sampling && state.glCalls ? ' glAll=' + state.glMs.toFixed(1) + '/' + state.glCalls : '') +
         ' other=' + Math.max(0, dur - known).toFixed(1));
     } catch (e) { /* 忽略 */ }
   }
+  if (state.flushProgram) state.flushProgram();
   if (state.sampling) state.glSamples.push({ calls: state.glCalls, ms: state.glMs });
 }
 
@@ -491,7 +688,9 @@ function createPerfHud(opts) {
   const canvas = opts.canvas;
   const CK = opts.CK;
   const setData = opts.setData;
-  const now = opts.now || Date.now;
+  // 有原生 performance(开发者工具、安卓)时用亚毫秒时钟,分项才分得开
+  const now = opts.now || ((typeof performance === 'object' && performance && typeof performance.now === 'function')
+    ? function () { return performance.now(); } : Date.now);
   const log = opts.log || console.log;
   const setIntervalFn = opts.setIntervalFn || setInterval;
   const clearIntervalFn = opts.clearIntervalFn || clearInterval;
@@ -527,18 +726,23 @@ function createPerfHud(opts) {
     fontFetchCount: 0, fontFetchMs: 0, fontFetchPending: 0,
     fontChangeCount: 0, memoHitsSeen: 0,
     fakeBoldCount: 0, boldFamilies: {},
+    progPending: null, progMs: 0, programCount: 0, programMs: 0, flushProgram: null,
+    frameProf: opts.frameProf || null,
+    rasterStart: null, cbEnd: null,
   };
   function add(cat, ms) {
     state.acc[cat] += ms;
     state.win[cat] += ms;
     if (cat === 'upload') state.uploadCount++;
-    else if (cat === 'shader') state.shaderCount++;
+    else if (cat === 'shader') { state.shaderCount++; state.progMs += ms; }
   }
 
   const gls = [];
   if (opts.gl) gls.push(opts.gl);
   if (opts.glAlt && gls.indexOf(opts.glAlt) < 0) gls.push(opts.glAlt);
   const wraps = gls.map(function (g) { return wrapGl(g, state, now, add); });
+  gls.forEach(function (g) { trackPrograms(g, state, log); });
+  if (CK) wrapRaster(CK, state, now);
   if (gls.length) {
     try {
       log('[mp-perf] gl 包装:' + wraps.map(function (w) { return w.wrapped + ' 个方法' + (w.failed ? '(' + w.failed + ' 个包不上)' : ''); }).join(' + ') +
@@ -633,6 +837,7 @@ function createPerfHud(opts) {
         ' scale2d=' + r.scaleCount + '/' + r.scaleMs.toFixed(1) +
         ' upload=' + r.uploadCount + '/' + r.uploadMs.toFixed(1) + '(img ' + r.uploadImgCount + '/' + r.uploadImgMs.toFixed(1) + ')' +
         ' shader=' + r.shaderCount + '/' + r.shaderMs.toFixed(1) +
+        (state.programCount ? ' programs=' + state.programCount + '/' + state.programMs.toFixed(1) : '') +
         ' font(fetch,parse)=' + r.fontFetchCount + '/' + r.fontFetchMs.toFixed(0) + ',' + r.fontParseCount + '/' + r.fontParseMs.toFixed(1) +
         (r.fontReuse ? '(reuse ' + r.fontReuse + ')' : '') + ' fontChange=' + r.fontChangeCount +
         ' layout=' + r.layoutCount + '/' + r.layoutMs.toFixed(1) +
@@ -701,7 +906,18 @@ function createPerfHud(opts) {
     try { setData({ 'mpPerf.visible': state.visible }); } catch (e) { /* 忽略 */ }
   }
 
-  return { start: start, stop: stop, report: report, setVisible: setVisible };
+  /**
+   * 承载页/文本桥报进来的分项:note('tb', ms) 文本桥一次轮询/状态同步耗时;
+   * note('setData', ms, bytes) 文本桥 setData(同步部分)耗时与负载字节数;
+   * note('resize') 垫片派发了一次 resize(视口变化)。
+   */
+  function note(kind, ms, bytes) {
+    if (kind === 'tb') add('tb', +ms || 0);
+    else if (kind === 'setData') { add('tb', +ms || 0); state.acc.setData++; state.acc.setDataBytes += (+bytes || 0); }
+    else if (kind === 'resize') state.acc.resize++;
+  }
+
+  return { start: start, stop: stop, report: report, setVisible: setVisible, note: note };
 }
 
-module.exports = { createBootTimer, createPerfHud, glMethodNames, sfntWeight };
+module.exports = { createBootTimer, createPerfHud, createFrameProf, programDigest, glMethodNames, sfntWeight };

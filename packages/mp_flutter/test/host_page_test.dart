@@ -35,7 +35,7 @@ const app = {};
 const reentry = Object.assign(new Error('reentry'), { code: 'MP_REENTRY' });
 const req = (p) => {
   if (/boot\\.js\$/.test(p)) return { boot: (o) => { globalThis.__onStage = o.onStage; calls.push('boot platform=' + o.platform + (o.simulate ? ' simulate=' + o.simulate : ''));
-    return ${bootMode == 'reentry' ? 'Promise.reject(reentry)' : 'Promise.resolve({ shim: {}, CK: { Surface: FakeSurface } })'}; } };
+    return ${bootMode == 'reentry' ? 'Promise.reject(reentry)' : "Promise.resolve({ shim: { pointerState: { down: 0 } }, CK: { Surface: FakeSurface } })"}; } };
   if (/canvaskit-loader\\.js\$/.test(p)) return { acquireGlContext: () => gl };
   if (/touch-bridge\\.js\$/.test(p)) return { createTouchBridge: () => ({ cancelAll() {}, handle() {} }) };
   if (/text-bridge\\.js\$/.test(p)) return {
@@ -43,7 +43,7 @@ const req = (p) => {
     createTextBridge: () => ({
       nativeBlur: (s) => calls.push('nativeBlur ' + s),
       pause: () => calls.push('pause'), resume: () => calls.push('resume'),
-      nativeInput() {}, nativeConfirm() {}, dispose() {},
+      nativeInput() {}, nativeConfirm() {}, dispose() {}, wake: () => calls.push('wake'),
     }),
   };
   if (/native-views\\.js\$/.test(p)) return {
@@ -63,7 +63,9 @@ const req = (p) => {
       mark: (stage) => calls.push('bootMark:' + stage),
       finish: () => calls.push('bootFinish'),
     }),
+    createFrameProf: () => ({ frame() {}, take() { return null; } }),
     createPerfHud: () => ({
+      note: () => {},
       start: () => calls.push('perfHudStart'),
       stop: () => calls.push('perfHudStop'),
     }),
@@ -253,6 +255,57 @@ void main() {
         done({ mpSemantics: page.data.mpSemantics });''');
       expect(r['mpSemantics'], <dynamic>[]);
     });
+  });
+
+  test('shader_warmup:默认告诉 boot 预热,关闭时显式 shaderWarmup: false', () {
+    expect(buildHostPageJs(verify: false), contains('shaderWarmup: true'));
+    expect(buildHostPageJs(verify: false, shaderWarmup: false), contains('shaderWarmup: false'));
+  });
+
+  test('shader_warmup_light:默认 false,开启时显式告诉 boot 只画轻项', () {
+    expect(buildHostPageJs(verify: false), contains('shaderWarmupLight: false'));
+    expect(buildHostPageJs(verify: false, shaderWarmupLight: true), contains('shaderWarmupLight: true'));
+  });
+
+  test('onMpTouch 维护 mpShim.pointerState.down(供 shader-warmup 判断手指是否按着);onHide 清零', () async {
+    final r = await runHostPage(buildHostPageJs(verify: false), bootMode: 'ok', scenario: '''
+      const seen = [];
+      page.onMpTouch({ type: 'touchstart', touches: [{}] });
+      seen.push(page.mpShim.pointerState.down);
+      page.onMpTouch({ type: 'touchstart', touches: [{}, {}] });
+      seen.push(page.mpShim.pointerState.down);
+      page.onMpTouch({ type: 'touchend', touches: [{}] });
+      seen.push(page.mpShim.pointerState.down);
+      page.onHide();
+      seen.push(page.mpShim.pointerState.down);
+      done({ seen });
+    ''');
+    expect(r['seen'], [1, 2, 1, 0]);
+  });
+
+  // M4 修复:按事件次数 ±1 时,两根手指分两次 touchstart 按下、一个 touchend
+  // (changedTouches 含 2 个,e.touches 变空)一起抬起,down 会一直卡在 1。
+  // 改成直接取 e.touches.length 后,一次 touchend 清空 touches 就能归零。
+  test('M4 修复:一次 touchend 抬起多根手指(e.touches 变空)后 down 立即归零,不卡住', () async {
+    final r = await runHostPage(buildHostPageJs(verify: false), bootMode: 'ok', scenario: '''
+      const seen = [];
+      page.onMpTouch({ type: 'touchstart', touches: [{}] });
+      seen.push(page.mpShim.pointerState.down);
+      page.onMpTouch({ type: 'touchstart', touches: [{}, {}] });
+      seen.push(page.mpShim.pointerState.down);
+      page.onMpTouch({ type: 'touchend', touches: [] });
+      seen.push(page.mpShim.pointerState.down);
+      done({ seen });
+    ''');
+    expect(r['seen'], [1, 2, 0]);
+  });
+
+  test('onMpTouch 没有 touches 字段时按 0 处理', () async {
+    final r = await runHostPage(buildHostPageJs(verify: false), bootMode: 'ok', scenario: '''
+      page.onMpTouch({ type: 'touchstart' });
+      done({ down: page.mpShim.pointerState.down });
+    ''');
+    expect(r['down'], 0);
   });
 
   group('--perf-hud(默认关)', () {

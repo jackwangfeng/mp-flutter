@@ -20,12 +20,15 @@ class StressCaseE extends StatefulWidget {
   State<StressCaseE> createState() => _StressCaseEState();
 }
 
+const int _holdMs = int.fromEnvironment('STRESS_E_HOLD_MS', defaultValue: 0);
+
 class _StressCaseEState extends State<StressCaseE> {
   late final List<FocusNode> _focusNodes =
       List.generate(StressConfig.formFieldCount, (_) => FocusNode());
   late final List<TextEditingController> _controllers =
       List.generate(StressConfig.formFieldCount, (_) => TextEditingController());
   final List<double> _focusMs = [];
+  final List<double> _focusTaskMs = [];
 
   bool _switchVal = false;
   int _radioVal = 0;
@@ -46,6 +49,11 @@ class _StressCaseEState extends State<StressCaseE> {
   Future<double> _measureFocus(FocusNode node) async {
     final sw = Stopwatch()..start();
     node.requestFocus();
+    // FocusManager 在微任务里应用焦点变化(监听者同步跑:TextField setState、
+    // EditableText 打开输入连接 → 平台消息 → 引擎建隐藏 <input>);排在它后面的
+    // 微任务回来时这段已跑完——单独记成 focusTask(帧外的聚焦开销)
+    await Future<void>.microtask(() {});
+    _focusTaskMs.add(sw.elapsedMicroseconds / 1000.0);
     final completer = Completer<void>();
     WidgetsBinding.instance.addPostFrameCallback((_) => completer.complete());
     // 聚焦通常会触发 Focus 相关 widget 的 rebuild、隐式已经排了一帧;这里
@@ -53,6 +61,9 @@ class _StressCaseEState extends State<StressCaseE> {
     SchedulerBinding.instance.scheduleFrame();
     await completer.future;
     sw.stop();
+    // `--dart-define=STRESS_E_HOLD_MS=<ms>`:聚焦后保持这么久再失焦(模拟真实输入:
+    // 光标闪烁、键盘弹起期间的帧开销);缺省 0 = 下一帧就失焦
+    if (_holdMs > 0) await Future.delayed(Duration(milliseconds: _holdMs));
     node.unfocus();
     // 给 unfocus 一点时间落地,再进入下一次聚焦,避免连续聚焦互相干扰。
     await Future.delayed(const Duration(milliseconds: 30));
@@ -61,10 +72,16 @@ class _StressCaseEState extends State<StressCaseE> {
 
   Future<void> _runFocusLoop() async {
     _focusMs.clear();
+    _focusTaskMs.clear();
     final sampleCount = StressConfig.formFocusSampleCount.clamp(0, _focusNodes.length);
+    // 聚焦阶段起止标记:accept-stress.js / 真机日志按它切出这段的 [mp-perf] 明细
+    // ignore: avoid_print
+    print('[mp-stress-mark] E focus-start');
     for (var i = 0; i < sampleCount; i++) {
       _focusMs.add(await _measureFocus(_focusNodes[i]));
     }
+    // ignore: avoid_print
+    print('[mp-stress-mark] E focus-end');
   }
 
   @override
@@ -76,7 +93,8 @@ class _StressCaseEState extends State<StressCaseE> {
       afterScroll: _runFocusLoop,
       buildExtra: () {
         final focusMax = _focusMs.isEmpty ? 0.0 : _focusMs.reduce((a, b) => a > b ? a : b);
-        return 'focusMax=${(focusMax * 10).round() / 10}';
+        final taskMax = _focusTaskMs.isEmpty ? 0.0 : _focusTaskMs.reduce((a, b) => a > b ? a : b);
+        return 'focusMax=${(focusMax * 10).round() / 10},focusTaskMax=${(taskMax * 10).round() / 10}';
       },
       contentBuilder: (context, controller) => ListView.builder(
         controller: controller,
