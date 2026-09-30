@@ -34,7 +34,7 @@ const flush = () => new FakeSurface().flush();
 const app = {};
 const reentry = Object.assign(new Error('reentry'), { code: 'MP_REENTRY' });
 const req = (p) => {
-  if (/boot\\.js\$/.test(p)) return { boot: (o) => { globalThis.__onStage = o.onStage; calls.push('boot platform=' + o.platform + (o.simulate ? ' simulate=' + o.simulate : ''));
+  if (/boot\\.js\$/.test(p)) return { boot: (o) => { globalThis.__onStage = o.onStage; globalThis.__bootOpts = o; calls.push('boot platform=' + o.platform + (o.simulate ? ' simulate=' + o.simulate : ''));
     return ${bootMode == 'reentry' ? 'Promise.reject(reentry)' : "Promise.resolve({ shim: { pointerState: { down: 0 } }, CK: { Surface: FakeSurface } })"}; } };
   if (/canvaskit-loader\\.js\$/.test(p)) return { acquireGlContext: () => gl };
   if (/touch-bridge\\.js\$/.test(p)) return { createTouchBridge: () => ({ cancelAll() {}, handle() {} }) };
@@ -64,6 +64,7 @@ const req = (p) => {
       finish: () => calls.push('bootFinish'),
     }),
     createFrameProf: () => ({ frame() {}, take() { return null; } }),
+    createPkgTrace: (o) => ({ fake: 'pkgTrace', hasWx: !!o.wx, t0: o.t0 }),
     createPerfHud: () => ({
       note: () => {},
       start: () => calls.push('perfHudStart'),
@@ -331,6 +332,16 @@ void main() {
       expect(r['calls'], containsAllInOrder(['perfHudStart', 'perfHudStop']));
     });
 
+    test('打开后:分包时间线(createPkgTrace)以 wx 与同一 t0 建好,经 pkgTrace 传给 boot', () async {
+      final r = await runHostPage(buildHostPageJs(verify: false, perfHud: true), bootMode: 'ok', scenario: '''
+        done({ trace: __bootOpts.pkgTrace });''');
+      expect(r['trace']['fake'], 'pkgTrace');
+      expect(r['trace']['hasWx'], true);
+      final off = await runHostPage(buildHostPageJs(verify: false), bootMode: 'ok', scenario: '''
+        done({ has: 'pkgTrace' in __bootOpts });''');
+      expect(off['has'], false);
+    });
+
     test('初始数据带 mpPerf(fps/avg 面板初始值),浮层默认不可见', () async {
       final r = await runHostPage(buildHostPageJs(verify: false), bootMode: 'ok', scenario: '''
         done({ mpPerf: page.data.mpPerf });''');
@@ -376,6 +387,18 @@ void main() {
         done({ calls, sp: page.data.mpSplash });''');
       expect(r['calls'], containsAllInOrder(['bootMark:canvaskit', 'bootMark:first-frame', 'bootFinish']));
       expect((r['sp'] as Map)['visible'], false);
+    });
+  });
+
+  group('冷启动开关透传给 boot', () {
+    test('默认 earlyWasm=true、粗体 after-first-frame;可分别关掉', () async {
+      final d = await runHostPage(buildHostPageJs(verify: false), bootMode: 'ok', scenario: '''
+        done({ early: __bootOpts.earlyWasm, bold: __bootOpts.cjkBoldTiming });''');
+      expect(d, {'early': true, 'bold': 'after-first-frame'});
+      final o = await runHostPage(buildHostPageJs(verify: false, earlyWasm: false, cjkFontBoldTiming: 'eager'),
+          bootMode: 'ok', scenario: '''
+        done({ early: __bootOpts.earlyWasm, bold: __bootOpts.cjkBoldTiming });''');
+      expect(o, {'early': false, 'bold': 'eager'});
     });
   });
 }

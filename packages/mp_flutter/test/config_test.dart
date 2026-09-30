@@ -503,4 +503,25 @@ private_infos: [notARealApi]
       ]));
     });
   });
+
+  group('冷启动开关', () {
+    MpFlutterConfig load(String yaml) => loadConfig('/r',
+        fileExists: (p) => p == '/r/mp_flutter.yaml', readFile: (_) => yaml, warn: (_) {});
+    test('解析 preload/cjk_font_bold_timing/early_wasm/boot_assets/initial_rendering_cache/lazy_code_loading', () {
+      final c = load('preload: wasm\ncjk_font_bold_timing: eager\nearly_wasm: false\nboot_assets: package\n'
+          'initial_rendering_cache: false\nlazy_code_loading: false\n');
+      expect(c.preload, 'wasm');
+      expect(c.cjkFontBoldTiming, 'eager');
+      expect(c.earlyWasm, false);
+      expect(c.bootAssets, 'package');
+      expect(c.initialRenderingCache, false);
+      expect(c.lazyCodeLoading, false);
+      expect(load('appid: x\n').preload, isNull);
+    });
+    test('取值不合法显式失败', () {
+      expect(() => load('preload: fast\n'), throwsA(isA<ConfigParseFailure>()));
+      expect(() => load('boot_assets: 1\n'), throwsA(isA<ConfigParseFailure>()));
+      expect(() => load('early_wasm: yes please\n'), throwsA(isA<ConfigParseFailure>()));
+    });
+  });
 }

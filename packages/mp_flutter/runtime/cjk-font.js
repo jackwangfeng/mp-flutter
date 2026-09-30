@@ -68,10 +68,18 @@ function preloadCjkFont(spec, opts) {
   const now = o.now || function () { return Date.now(); };
   const warn = o.warn || function (m) { try { console.warn(m); } catch (e) { /* 忽略 */ } };
   const loadTimeoutMs = o.loadTimeoutMs || CJK_FONT_LOAD_TIMEOUT_MS;
-  const t0 = now();
+  // [opts.startAfter](Promise,可缺省):等它定下来(resolve 或 reject 都算)才
+  // 开始请求分包——粗体用它推迟到首帧之后,不和首帧前必需的分包抢带宽。
+  const gate = o.startAfter ? Promise.resolve(o.startAfter).then(null, function () {}) : Promise.resolve();
+  let t0 = 0;
   // M6:spec.load() 超时按读取失败处理——落到下面统一的 catch 分支,返回 null
   // 走 404 分支(中文回退按需下载分片),不让首屏一直等一个卡住的分包。
-  return Promise.resolve().then(function () { return withTimeout(spec.load(), loadTimeoutMs); }).then(function () {
+  return gate.then(function () {
+    t0 = now();
+    if (typeof o.onIssue === 'function') { try { o.onIssue(); } catch (e) { /* 计时失败不影响读取 */ } }
+    return withTimeout(spec.load(), loadTimeoutMs);
+  }).then(function () {
+    if (typeof o.onReady === 'function') { try { o.onReady(); } catch (e) { /* 同上 */ } }
     const t1 = now();
     if (log) log('[mp-perf] ' + label + ' pkg ' + (t1 - t0) + 'ms');
     const fs = wx && wx.getFileSystemManager && wx.getFileSystemManager();
@@ -103,8 +111,12 @@ function preloadCjkFont(spec, opts) {
  * 引擎按字重匹配,w≥600 的文字落到真粗体上,不再合成加粗。
  *
  * 首帧不等它:
- *   · 调用本函数时才开始读分包(boot 在 dart/wasm 分包请求发出之后调用,
- *     不挤在关键路径分包前面);
+ *   · 默认(`cjk_font_bold_timing: after_first_frame`)boot 传 [opts.startAfter]
+ *     = 首帧提交,首帧之后才请求分包:首帧前真正必需的 wasm/dart/常规字体
+ *     独享带宽(粗体约 1.2MB,原先与它们同时下载,占首帧前字节的 17–24%);
+ *     `eager` 时不传,调用本函数即开始读(boot 在 dart/wasm 分包请求之后调用);
+ *   · 补注册经 [opts.whenIdle] 安排到空闲时(boot 实现:没有手指按着、最近
+ *     300ms 没有帧提交),不在滚动/动画中途整页重排;
  *   · 引擎取字体([respond])时,粗体只要不晚于常规字体到就一起交出去——常规
  *     字体本来就在等,零额外等待,首帧前注册不发 fontsChange;
  *   · 比常规字体晚:先按 404 应答(引擎打一行 "not found (404)" 警告,照常
@@ -127,13 +139,23 @@ function createCjkBold(spec, regular, opts) {
   const state = { status: 'loading' };
   const bytes = preloadCjkFont(spec, {
     wx: o.wx, perfLog: log, now: o.now, warn: o.warn, loadTimeoutMs: o.loadTimeoutMs, label: 'cjk-bold',
+    startAfter: o.startAfter, onIssue: o.onIssue, onReady: o.onReady,
     failMessage: '[mp-flutter] 合一字体粗体读取失败,粗体中文改由 CanvasKit 合成加粗:',
   });
   let listener = null;
   let pending = null;
   let lateAt = 0;
 
+  // [opts.whenIdle](fn)(可缺省):补注册要发一次 fontsChange、整页重排一遍,
+  // 由 boot 安排到空闲时(没有手指按着、最近一段时间没有帧在画)再做,避开滚动。
+  const whenIdle = typeof o.whenIdle === 'function' ? o.whenIdle : function (fn) { fn(); };
+  let scheduled = false;
   function deliver() {
+    if (!listener || !pending || scheduled) return;
+    scheduled = true;
+    whenIdle(function () { scheduled = false; deliverNow(); });
+  }
+  function deliverNow() {
     if (!listener || !pending) return;
     const b = pending;
     pending = null;

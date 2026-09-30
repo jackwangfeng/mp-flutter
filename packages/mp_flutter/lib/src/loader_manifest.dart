@@ -47,6 +47,12 @@ const kReadyModuleSource = '// [mp-flutter] 分包就位探针:require.async 它
 /// [deferredSubPackages]:[subPackages] 里不必挡在 CanvasKit 初始化前的分包
 /// (启动资源包,引擎初始化取字体时才用),boot 让它们与 CanvasKit/Dart 并行
 /// 下载,initializeEngine 之前等齐。
+///
+/// [wasmSubPackage](冷启动 `early_wasm`):[subPackages] 里装 CanvasKit wasm 的
+/// 分包。boot 看到它就把这个分包单独拆出来,一到就编译 CanvasKit,不等 dart
+/// 分包;不写(或关掉 early_wasm)时 boot 等全部首帧前分包就位再编译。
+///
+/// 主包里的资源(`boot_assets` 并进主包时)不经分包门控,直接 require.async。
 String buildLoaderManifest({
   required List<String> dartModulePaths,
   required List<String> subPackages,
@@ -56,6 +62,7 @@ String buildLoaderManifest({
   ({String asset, String package, String file})? cjkFont,
   ({String asset, String package, String file})? cjkFontBold,
   List<String> deferredSubPackages = const [],
+  String? wasmSubPackage,
 }) {
   final b = StringBuffer()
     ..writeln('// [mp-flutter] 加载表(构建期生成,勿手改)。')
@@ -90,6 +97,9 @@ String buildLoaderManifest({
         'function () { return require.async(${_lit('$root/$kReadyModule')}); },');
   }
   b.writeln('  },');
+  if (wasmSubPackage != null) {
+    b.writeln('  wasmSubPackage: ${jsonEncode(wasmSubPackage)},');
+  }
   if (deferredSubPackages.isNotEmpty) {
     b.writeln('  deferredSubPackages: ${jsonEncode(deferredSubPackages)},');
   }
@@ -117,7 +127,10 @@ String buildLoaderManifest({
   byAsset.forEach((path, chunks) {
     chunks.sort((a, b) => a.chunkIndex.compareTo(b.chunkIndex));
     final loads = chunks.map((c) => 'require.async(${_lit(c.modulePath)})').join(', ');
-    final lazy = {for (final c in chunks) if (!bootRoots.contains(c.package)) c.package}.toList()..sort();
+    final lazy = {
+      for (final c in chunks)
+        if (!bootRoots.contains(c.package) && c.package != 'main') c.package
+    }.toList()..sort();
     final body = 'Promise.all([$loads])';
     b.writeln(lazy.isEmpty
         ? '    ${jsonEncode(path)}: function () { return $body; },'

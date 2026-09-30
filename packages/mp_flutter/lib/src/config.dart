@@ -115,7 +115,35 @@ const kKnownConfigKeys = <String>{
   'font_base_url',
   'splash_title',
   'splash_color',
+  'preload',
+  'cjk_font_bold_timing',
+  'early_wasm',
+  'boot_assets',
+  'initial_rendering_cache',
+  'lazy_code_loading',
 };
+
+/// `preload` / `--preload`:app.json preloadRule 的挑选策略(冷启动)。
+///   · auto —— 推荐默认,目前等于 dart;
+///   · dart —— dart 分包优先(它们到了还要在 JS 线程上注入,先到能和 wasm
+///             下载重叠),然后启动资源包 / wasm / 常规合一字体;
+///   · wasm —— 0.2.3 及以前的顺序:wasm → 启动资源包 → 常规字体 → dart → 粗体;
+///   · none —— 不写 preloadRule,全靠 boot 的 require.async。
+const kPreloadModes = ['auto', 'dart', 'wasm', 'none'];
+
+/// `cjk_font_bold_timing` / `--cjk-font-bold-timing`:粗体合一字体什么时候请求。
+///   · after_first_frame —— 默认,首帧提交后才请求,首帧前不抢带宽;
+///   · eager —— 0.2.3 的行为,boot 开始就请求(排在 dart/wasm 之后)。
+const kCjkBoldTimings = ['after_first_frame', 'eager'];
+
+/// `boot_assets` / `--boot-assets`:启动资源(FontManifest/AssetManifest/清单字体/
+/// Roboto)放哪。
+///   · auto —— 默认:放得下就进主包(并入后主包合计不超过 1200KB,离 1.5MB 告警线留足余量),
+///             否则并进余量最大的 dart 分包,都放不下才单独成包;
+///   · main —— 同 auto(显式要求进主包,放不下同样依次退回);
+///   · dart —— 跳过主包,直接尝试 dart 分包;
+///   · package —— 0.2.3 的行为,单独的 pkg-assets-boot 分包。
+const kBootAssetsModes = ['auto', 'main', 'dart', 'package'];
 
 /// `cjk_font` / `--cjk-font` 的取值。`false` 表示关闭。
 const kCjkFontLevels = ['level1', 'full', 'false'];
@@ -175,6 +203,13 @@ class MpFlutterConfig {
   final String? fontBaseUrl;
   final String? splashTitle;
   final String? splashColor;
+  /// 冷启动开关(见 [kPreloadModes]/[kCjkBoldTimings]/[kBootAssetsModes])。null = 未配置。
+  final String? preload;
+  final String? cjkFontBoldTiming;
+  final bool? earlyWasm;
+  final String? bootAssets;
+  final bool? initialRenderingCache;
+  final bool? lazyCodeLoading;
 
   const MpFlutterConfig({
     this.appId,
@@ -196,6 +231,12 @@ class MpFlutterConfig {
     this.fontBaseUrl,
     this.splashTitle,
     this.splashColor,
+    this.preload,
+    this.cjkFontBoldTiming,
+    this.earlyWasm,
+    this.bootAssets,
+    this.initialRenderingCache,
+    this.lazyCodeLoading,
   });
 
   static const empty = MpFlutterConfig();
@@ -278,6 +319,13 @@ MpFlutterConfig loadConfig(
     throw ConfigParseFailure(path, '$key 只能是 level1 / full / false,实际是:$v(${v.runtimeType})');
   }
 
+  String? asEnum(String key, List<String> allowed) {
+    final v = map[key];
+    if (v == null) return null;
+    if (v is String && allowed.contains(v)) return v;
+    throw ConfigParseFailure(path, '$key 只能是 ${allowed.join(' / ')},实际是:$v(${v.runtimeType})');
+  }
+
   List<String>? asPrivateInfoList(String key) {
     final v = map[key];
     if (v == null) return null;
@@ -345,6 +393,12 @@ MpFlutterConfig loadConfig(
     fontBaseUrl: asString('font_base_url'),
     splashTitle: asString('splash_title'),
     splashColor: asString('splash_color'),
+    preload: asEnum('preload', kPreloadModes),
+    cjkFontBoldTiming: asEnum('cjk_font_bold_timing', kCjkBoldTimings),
+    earlyWasm: asBool('early_wasm'),
+    bootAssets: asEnum('boot_assets', kBootAssetsModes),
+    initialRenderingCache: asBool('initial_rendering_cache'),
+    lazyCodeLoading: asBool('lazy_code_loading'),
   );
 }
 

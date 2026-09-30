@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'size_check.dart' show kPackageLimitBytes;
+
 /// 资源分包的 root 前缀:`pkg-assets-0`、`pkg-assets-1`……(按需加载的一般资源)
 const kAssetPackagePrefix = 'pkg-assets-';
 
@@ -128,6 +130,12 @@ class AssetGroup {
 
   final List<String> paths;
 
+  /// 不单独成包,并进已有的包(冷启动 `boot_assets`):`'main'`(主包,模块放在
+  /// 主包里的 [name] 目录下)或某个 dart 分包 root(模块放在该分包的 [name]
+  /// 目录下,[name] 须以该 root 开头)。这种组只能装进一个包——调用方按
+  /// [estimateGroupBytes] 事先确认放得下,溢出直接抛 [StateError]。
+  final String? hostPackage;
+
   const AssetGroup({
     required this.name,
     required this.paths,
@@ -135,6 +143,7 @@ class AssetGroup {
     this.boot = false,
     this.budgetBytes = kAssetPackageBudgetBytes,
     this.sequential = false,
+    this.hostPackage,
   });
 
   String rootFor(int i) => numbered ? '$name$i' : (i == 0 ? name : '$name-$i');
@@ -277,13 +286,17 @@ AssetBundle buildAssetBundle(
         idx = used.length - 1;
       }
       used[idx] += m.encoded;
-      final pkg = g.rootFor(idx);
+      if (g.hostPackage != null && idx > 0) {
+        throw StateError('资源组 ${g.name} 要并进 ${g.hostPackage},但一个包装不下(调用方应先用 estimateGroupBytes 确认)');
+      }
+      final dir = g.rootFor(idx);
+      final pkg = g.hostPackage ?? dir;
       var file = sanitizeAssetModulePath(m.path);
       if (m.count > 1) file = file.replaceFirst(RegExp(r'\.js$'), '_p${m.index}.js');
       modules.add(AssetModule(
         originalPath: m.path,
         package: pkg,
-        modulePath: '$pkg/$file',
+        modulePath: '$dir/$file',
         source: m.source,
         originalBytes: base64Decode(m.b64).length,
         encodedBytes: m.encoded,
@@ -291,6 +304,8 @@ AssetBundle buildAssetBundle(
         chunkCount: m.count,
       ));
     }
+    // 并进已有包的组不产生新分包(主包不是分包;dart 分包已在分包表里)
+    if (g.hostPackage != null) continue;
     for (var i = 0; i < used.length; i++) {
       roots.add(g.rootFor(i));
       if (g.boot) bootRoots.add(g.rootFor(i));
@@ -302,6 +317,76 @@ AssetBundle buildAssetBundle(
   });
 
   return AssetBundle(modules, roots, bootPackageRoots: bootRoots);
+}
+
+/// 启动资源并进主包时,并入后主包合计(含尚未生成的加载表/承载页的预留)的
+/// 上限:1200KB。微信主包上限 2048KB,开发者工具在 1.5MB 左右开始提示主包
+/// 偏大;主包在微信原生加载页阶段下载,越大原生加载页越长,不值得逼近。
+const kBootAssetsMainCeilingBytes = 1200 * 1024;
+
+/// 启动资源并进 dart 分包时,并入后该分包的上限:与 dart 分片默认预算相同
+/// (2048KB 的 85%,开发者工具界面计的 JS 尺寸比源码大 6–8%,留余量)。
+const kBootAssetsDartCeilingBytes = kPackageLimitBytes * 85 ~/ 100;
+
+/// 启动资源在主包里的目录(模块路径 `mp-assets-boot/a/...`)。
+const kMainBootAssetDir = 'mp-assets-boot';
+
+/// 按 `boot_assets` 策略([mode]:auto/main/dart/package)决定启动资源组
+/// (`pkg-assets-boot`)落在哪,返回改写后的分组与去向说明:
+///   · auto/main:并入后主包([mainBytes] 是主包已有字节 + 预留)不超过
+///     [mainCeilingBytes] 就进主包;
+///   · 否则(或 dart):并进 [dartPackageBytes] 里最小的 dart 分包,并入后不超过
+///     [dartCeilingBytes];
+///   · 都放不下,或 package:保持单独的 `pkg-assets-boot` 分包(0.2.3 行为)。
+/// 少一个分包就少一次下载往返(预览/首开时每个分包都有固定开销)。
+({List<AssetGroup> groups, String where}) placeBootAssets(
+  List<AssetGroup> groups,
+  Map<String, List<int>> assets, {
+  required String mode,
+  required int mainBytes,
+  Map<String, int> dartPackageBytes = const {},
+  int mainCeilingBytes = kBootAssetsMainCeilingBytes,
+  int dartCeilingBytes = kBootAssetsDartCeilingBytes,
+}) {
+  final i = groups.indexWhere((g) => g.boot && g.name == kBootAssetPackage && g.hostPackage == null);
+  if (i < 0 || mode == 'package') return (groups: groups, where: kBootAssetPackage);
+  final g = groups[i];
+  final size = estimateGroupBytes(assets, g.paths);
+  AssetGroup? moved;
+  String where = kBootAssetPackage;
+  if ((mode == 'auto' || mode == 'main') && mainBytes + size <= mainCeilingBytes) {
+    moved = AssetGroup(name: kMainBootAssetDir, boot: true, paths: g.paths, hostPackage: 'main',
+        budgetBytes: 1 << 40);
+    where = 'main';
+  } else if (dartPackageBytes.isNotEmpty) {
+    final byRoom = dartPackageBytes.entries.toList()
+      ..sort((a, b) {
+        final c = a.value.compareTo(b.value);
+        return c != 0 ? c : a.key.compareTo(b.key);
+      });
+    final best = byRoom.first;
+    if (best.value + size <= dartCeilingBytes) {
+      moved = AssetGroup(name: '${best.key}/boot', boot: true, paths: g.paths, hostPackage: best.key,
+          budgetBytes: 1 << 40);
+      where = best.key;
+    }
+  }
+  if (moved == null) return (groups: groups, where: kBootAssetPackage);
+  return (groups: [...groups]..[i] = moved, where: where);
+}
+
+/// [paths] 这些资源转成 base64 模块后的总字节数(与 [buildAssetBundle] 实际
+/// 产出一致,含模块头)。用来事先判断启动资源能不能并进主包/dart 分包。
+int estimateGroupBytes(Map<String, List<int>> assets, Iterable<String> paths,
+    {int packageBudgetBytes = kAssetPackageBudgetBytes}) {
+  final chunkChars = ((packageBudgetBytes - 1024) ~/ 4) * 4;
+  var n = 0;
+  for (final p in paths) {
+    for (final m in _encode(p, assets[p]!, chunkChars)) {
+      n += m.encoded;
+    }
+  }
+  return n;
 }
 
 class _Pending {

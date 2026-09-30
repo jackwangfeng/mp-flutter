@@ -5,7 +5,7 @@
 ## 三步快速开始
 
 **1. 加依赖**——仓库尚未发布到 pub.dev,以 git 依赖引入本仓库(公开仓库,无需
-额外凭证;`ref` 建议固定到一个发布 tag,例如 `v0.2.3`,而不是 `main`,避免上游
+额外凭证;`ref` 建议固定到一个发布 tag,例如 `v0.2.4`,而不是 `main`,避免上游
 后续提交影响本地构建的可复现性):
 
 ```yaml
@@ -14,7 +14,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.2.3
+      ref: v0.2.4
 ```
 
 **2. 编译**——工程根跑一条命令(先跑 `dart run mp_flutter doctor` 自检工具链
@@ -144,7 +144,7 @@ dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter_wechat
-      ref: v0.2.3
+      ref: v0.2.4
 ```
 
 ```dart
@@ -273,10 +273,10 @@ dart run mp_flutter --project <工程> --output <产物目录> --semantics-mirro
 
 | 分包 | 内容 | 何时下载 |
 |---|---|---|
-| `pkg-dart-*`、`pkg-wasm` | `main.dart.js` 分片、CanvasKit | 首帧前(`pkg-wasm` 走 preloadRule 预下载) |
-| `pkg-assets-boot` | `FontManifest.json`、`AssetManifest.bin(.json)`、FontManifest 里声明的全部字体(如 MaterialIcons)、回退 Roboto | 首帧前;与 CanvasKit 初始化、Dart 分片执行并行下载,引擎初始化取字体前等齐 |
+| `pkg-dart-*`、`pkg-wasm` | `main.dart.js` 分片、CanvasKit | 首帧前(默认 `pkg-dart-0` 走 preloadRule 预下载;`pkg-wasm` 一到就编译,不等 dart 分包) |
+| 主包 `mp-assets-boot/`(默认)或 `pkg-assets-boot` | `FontManifest.json`、`AssetManifest.bin(.json)`、FontManifest 里声明的全部字体(如 MaterialIcons)、回退 Roboto | 首帧前。默认并进主包(并入后主包 ≤1200KB 时),放不下就并进最小的 dart 分包,都放不下才单独成 `pkg-assets-boot`(与 CanvasKit 初始化、Dart 分片执行并行下载,引擎初始化取字体前等齐) |
 | `pkg-cjk` | 常用汉字合一字体(`cjk_font`,brotli 压缩的 TTF:level1 约 650KB,full 约 1.1MB,默认 full) | 首帧前;boot 一开始就拉,就位后直接读文件 |
-| `pkg-cjkb` | 合一字体的粗体(`cjk_font_bold`,默认跟随 `cjk_font`:full 约 1.17MB,level1 约 660KB) | 不挡首帧;dart/wasm 分包请求发出后再拉,晚到就首帧后补注册 |
+| `pkg-cjkb` | 合一字体的粗体(`cjk_font_bold`,默认跟随 `cjk_font`:full 约 1.17MB,level1 约 660KB) | 不挡首帧;默认首帧提交后才请求,到了空闲时补注册 |
 | `pkg-notices` | `assets/NOTICES`(第三方许可证全文,依赖多时 1–2MB) | 打开许可证页时 |
 | `pkg-fonts-*` | 简体中文回退字体分片(约 512KB 一个) | 页面第一次出现相应汉字时 |
 | `pkg-assets-*` | 图片、shader 等其余资源(按路径排序,约 512KB 一个) | 引擎第一次请求其中某个资源时 |
@@ -341,8 +341,11 @@ Noto Sans SC v37 Bold 子集(与常规同一字表,已入库),在 FontManifest �
 - **必须与 `cjk_font` 同档**:同一 family 下 SkParagraph 按字重只选一个字体排版,粗体缺的字直接画成
   豆腐块(不会退回同家族的常规字体),而引擎缺字检测按家族把所有字体的覆盖取并集,认为"有字"就不去拉
   回退分片;构建期对不同档直接报错。
-- **不挡首帧**:粗体放独立分包 `pkg-cjkb`(full 常规 + full 粗体超过单分包 2048KB),boot 在 dart/wasm/
-  启动资源包请求发出之后才开始读。引擎取字体时,粗体只要不晚于常规字体到就一起应答(常规字体本来就在
+- **不挡首帧**:粗体放独立分包 `pkg-cjkb`(full 常规 + full 粗体超过单分包 2048KB),默认
+  (`cjk_font_bold_timing: after_first_frame`)首帧提交之后才请求,首帧前不和 wasm/dart/常规字体抢带宽,
+  首帧里的粗体一律先合成加粗,字节到了在空闲时(没有手指按着、最近 300ms 没有出帧)补注册;
+  `cjk_font_bold_timing: eager`(`--cjk-font-bold-timing=eager`)恢复 0.2.3 的行为:boot 在 dart/wasm/
+  启动资源包请求发出之后就开始读。eager 下引擎取字体时,粗体只要不晚于常规字体到就一起应答(常规字体本来就在
   等,零额外等待;首帧前注册不发 fontsChange;模拟器里引擎取用等待 0–1ms);晚到则先按 404 应答(控制台
   有一行引擎的 `not found (404)` 警告),首帧照常画(粗体文字这时仍是合成加粗),字节到了经入口包装在
   首帧之后调用 `ui.loadFontFromList` 补注册——引擎发一次 fontsChange,框架把段落重排一遍。这次重排
@@ -376,6 +379,24 @@ Noto Sans SC v37 Bold 子集(与常规同一字表,已入库),在 FontManifest �
 
 模拟器里首帧差异在噪声内;真机上旧方案的 `cjk-font fetch` 是 iOS 1536ms / 安卓 815ms,新方案看
 `[mp-perf] cjk-font pkg / read / parse / 引擎取用等待` 几行(`--perf-hud`)。
+
+**冷启动开关**(每项都能单独开关,方便真机 A/B;默认是冷启动方案推荐的组合):
+
+| `mp_flutter.yaml` / CLI | 默认 | 作用 |
+|---|---|---|
+| `preload` / `--preload=auto\|dart\|wasm\|none` | `auto`(目前等于 `dart`) | app.json preloadRule(额度 2MB)按什么顺序挑分包。`dart`:dart 分包 → 启动资源包 → wasm → 常规字体(dart 分包到了还要在 JS 线程上注入,先到能和 wasm 下载重叠);`wasm`:0.2.3 的 wasm 优先顺序;`none`:不写 preloadRule |
+| `early_wasm` / `--[no-]early-wasm` | 开 | `pkg-wasm` 一到就编译并实例化 CanvasKit,不等 dart 分包;装垫片、执行 Dart 仍在两边都就位之后 |
+| `cjk_font_bold_timing` / `--cjk-font-bold-timing=after_first_frame\|eager` | `after_first_frame` | 粗体合一字体首帧后才请求(见上) |
+| `boot_assets` / `--boot-assets=auto\|main\|dart\|package` | `auto` | 启动资源放哪:主包 → 最小的 dart 分包 → 单独分包(`package` = 0.2.3 行为),少一个首帧前分包请求 |
+| `initial_rendering_cache` / `--[no-]initial-rendering-cache` | 开 | 承载页 `initialRenderingCache: static`:第二次起冷启动时原生启动界面直接上屏,不等主包 JS 注入和 onLoad(缓存里只有启动界面的 view/text,canvas 不显示,正好被启动界面盖住) |
+| `lazy_code_loading` / `--[no-]lazy-code-loading` | 开 | app.json `lazyCodeLoading: requiredComponents`;我们只有一个真页面、没有自定义组件,收益很小,无害 |
+
+`--perf-hud` 下每个分包打一行 `[mp-boot] pkg <name> req=+x dl=+a..+b inject=c ready=+y size=…`:
+`req`/`ready` 是 boot 发出/等到 `require.async` 的时刻,`dl` 是 `wx.getPerformance()` 的
+`loadPackage` 条目给出的真实下载时间窗,`inject` 是 `evaluateScript` 条目里该分包 JS 的注入耗时,
+都相对 `App.onLaunch`;基础库不支持时 `dl`/`inject` 省略。另有 `[mp-boot] wx route(appLaunch) …`、
+`firstRender` 等条目补上 onLaunch 之前的时间,`[mp-boot] ck-wait-dart`(dart 分包全部就位 −
+CanvasKit 就绪,为正说明 wasm 编译已完全藏在 dart 分包后面)。
 
 **分包数量**:微信官方文档只限制单个分包/主包 ≤2MB、全部分包合计 ≤30MB(服务商代开发
 的小程序 ≤20MB),没有分包个数上限

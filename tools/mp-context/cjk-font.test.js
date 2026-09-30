@@ -108,3 +108,38 @@ test('常规字体读取失败:粗体也不注册(家族里只剩粗体会让常
   assert.strictEqual(bold.state.status, 'failed');
   assert.match(warns[0], /粗体读取失败.*合成加粗/);
 });
+
+test('startAfter:闸门定下来(resolve 或 reject)之前不请求分包;onIssue/onReady 各报一次', async () => {
+  for (const fail of [false, true]) {
+    const order = [];
+    let open, shut;
+    const gate = new Promise((r, j) => { open = r; shut = j; });
+    const wx = { getFileSystemManager: () => ({ readCompressedFile(o) { o.success({ data: new Uint8Array([5]).buffer }); } }) };
+    const p = preloadCjkFont({ file: '/pkg-cjkb/f.br', load: () => { order.push('load'); return Promise.resolve(); } },
+      { wx, warn: () => {}, startAfter: gate, onIssue: () => order.push('issue'), onReady: () => order.push('ready') });
+    await new Promise((r) => setTimeout(r, 5));
+    assert.deepStrictEqual(order, []);
+    if (fail) shut(new Error('x')); else open();
+    assert.deepStrictEqual(Array.from(await p), [5]);
+    assert.deepStrictEqual(order, ['issue', 'load', 'ready']);
+  }
+});
+
+test('createCjkBold whenIdle:字节与监听都就位后经 whenIdle 补交,只排一次', async () => {
+  const idle = [];
+  const regular = Promise.resolve(new Uint8Array([1]));
+  const wx = { getFileSystemManager: () => ({ readCompressedFile(o) { setTimeout(() => o.success({ data: new Uint8Array([7]).buffer }), 5); } }) };
+  const b = createCjkBold({ family: 'F', file: '/pkg-cjkb/f.br', load: () => Promise.resolve() }, regular,
+    { wx, warn: () => {}, whenIdle: (fn) => idle.push(fn) });
+  assert.strictEqual(await b.respond(), null, '粗体晚于常规:404');
+  const got = [];
+  b.bridge.listen((bytes, fam) => got.push([Array.from(bytes), fam]));
+  await new Promise((r) => setTimeout(r, 20));
+  assert.strictEqual(idle.length, 1);
+  b.bridge.listen((bytes, fam) => got.push([Array.from(bytes), fam]));   // 重复 listen 不重复排
+  assert.strictEqual(idle.length, 1);
+  assert.deepStrictEqual(got, []);
+  idle[0]();
+  assert.deepStrictEqual(got, [[[7], 'F']]);
+  assert.strictEqual(b.state.status, 'late-loaded');
+});

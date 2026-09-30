@@ -6,7 +6,7 @@ const path = require('path');
 // perf-hud.js 不碰任何小程序专属全局(wx/window/self),纯函数式包装逻辑,
 // 直接 require 即可单测,不需要 createMpContext 的 vm 沙箱。
 const RT = path.resolve(__dirname, '../../packages/mp_flutter/runtime');
-const { createBootTimer, createPerfHud, createFrameProf, programDigest, glMethodNames, sfntWeight } = require(path.join(RT, 'perf-hud.js'));
+const { createBootTimer, createPkgTrace, createPerfHud, createFrameProf, programDigest, glMethodNames, sfntWeight } = require(path.join(RT, 'perf-hud.js'));
 
 /** 可控时钟:调用方手动推进 nowValue 模拟耗时。 */
 function makeClock(start = 0) {
@@ -664,4 +664,87 @@ test('note():文本桥耗时 tb=、setData 次数/字节、resize 次数进帧�
   assert.ok(gap, logs.join('\n'));
   assert.match(gap, /tb=21\.0 setData=1\/240B resize=1/);
   hud.stop();
+});
+
+test('createPkgTrace:req/ready 自己计时,dl/inject/size 取 wx.getPerformance 条目;首帧后统一打,晚到的补打', () => {
+  const clock = makeClock(10000);
+  const logs = [];
+  const timers = [];
+  let observerCb = null;
+  let observed = null;
+  const wx = {
+    getPerformance: () => ({
+      now: () => clock.now(),   // 与 Date.now 同口径(toEpoch = 0)
+      getEntries: () => [{ entryType: 'navigation', name: 'appLaunch', startTime: 9800, duration: 150 }],
+      createObserver: (cb) => { observerCb = cb; return { observe: (o) => { observed = o; } }; },
+    }),
+  };
+  const tr = createPkgTrace({ t0: 10000, now: clock.now, log: (m) => logs.push(m), wx, setTimeout: (fn) => timers.push(fn) });
+  assert.deepStrictEqual(observed.entryTypes, ['loadPackage', 'script', 'navigation', 'render']);
+  clock.advance(50); tr.issued('pkg-dart-0'); tr.issued('pkg-wasm');
+  clock.advance(900); tr.ready('pkg-dart-0');
+  clock.advance(100); tr.ready('pkg-wasm');
+  observerCb({ getEntries: () => [
+    { entryType: 'loadPackage', name: 'downloadPackage', packageName: 'pkg-dart-0/', packageSize: 1740 * 1024, startTime: 10060, duration: 700 },
+    { entryType: 'script', name: 'evaluateScript', fileList: ['pkg-dart-0/dart.js'], duration: 180 },
+    { entryType: 'script', name: 'evaluateScript', packageName: 'pkg-dart-0', duration: 20 },
+    { entryType: 'loadPackage', name: 'downloadPackage', packageName: 'pkg-fonts-0', startTime: 12000, duration: 50 },
+  ] });
+  tr.firstFrame();
+  assert.strictEqual(logs.length, 0, '首帧时只排定时器');
+  timers.shift()();
+  assert.deepStrictEqual(logs, [
+    '[mp-boot] wx appLaunch start=-200ms dur=150ms',
+    '[mp-boot] pkg pkg-dart-0 req=+50ms dl=+60ms..+760ms inject=200ms ready=+950ms size=1740KB',
+    '[mp-boot] pkg pkg-wasm req=+50ms ready=+1050ms',
+    '[mp-boot] pkg pkg-fonts-0 dl=+2000ms..+2050ms',
+  ]);
+  // 首帧后才请求的粗体:ready 后补打,已打过的不重复
+  tr.issued('pkg-cjkb');
+  timers.splice(0);
+  tr.report();
+  assert.strictEqual(logs.length, 4, '还没 ready 的不打');
+  clock.advance(500); tr.ready('pkg-cjkb');
+  timers.shift()();
+  assert.strictEqual(logs.length, 5);
+  assert.match(logs[4], /^\[mp-boot\] pkg pkg-cjkb req=\+1050ms ready=\+1550ms$/);
+  tr.note('ck-wait-dart', -12.4);
+  assert.strictEqual(logs[5], '[mp-boot] ck-wait-dart -12ms');
+});
+
+test('createPkgTrace:wx.getPerformance 不可用/抛错时静默跳过,只剩 req/ready', () => {
+  const logs = [];
+  for (const wx of [null, {}, { getPerformance() { throw new Error('nope'); } }]) {
+    logs.length = 0;
+    const tr = createPkgTrace({ t0: 0, now: () => 5, log: (m) => logs.push(m), wx, setTimeout: (fn) => fn() });
+    tr.issued('pkg-wasm'); tr.ready('pkg-wasm'); tr.firstFrame();
+    assert.deepStrictEqual(logs, ['[mp-boot] pkg pkg-wasm req=+5ms ready=+5ms']);
+  }
+});
+
+test('createPkgTrace:startTime 是相对时间(有 performance.now)时换算到 Date.now 口径', () => {
+  const logs = [];
+  const tr = createPkgTrace({
+    t0: 100000, now: () => 100500, log: (m) => logs.push(m), setTimeout: (fn) => fn(),
+    wx: { getPerformance: () => ({ now: () => 500, getEntries: () => [
+      { entryType: 'loadPackage', packageName: 'pkg-wasm', startTime: 100, duration: 300 }] }) },
+  });
+  tr.firstFrame();
+  assert.deepStrictEqual(logs, ['[mp-boot] pkg pkg-wasm dl=+100ms..+400ms']);
+});
+
+test('createPkgTrace:evaluateScript 条目用 moduleName(__APP__ → main),route 条目带 navigationType', () => {
+  const logs = [];
+  const tr = createPkgTrace({ t0: 1790727009000, now: () => 1790727009500, log: (m) => logs.push(m), setTimeout: (fn) => fn(),
+    wx: { getPerformance: () => ({ getEntries: () => [
+      { duration: 398, entryType: 'script', name: 'evaluateScript', startTime: 1790727009645, moduleName: '__APP__', fileList: ['/common.app.js'] },
+      { duration: 50, entryType: 'script', name: 'evaluateScript', startTime: 1790727009700, moduleName: 'pkg-dart-0' },
+      { duration: 69, entryType: 'navigation', name: 'route', startTime: 1790727010125, navigationType: 'appLaunch' },
+    ] }) } });
+  tr.firstFrame();
+  assert.deepStrictEqual(logs, [
+    '[mp-boot] wx route(appLaunch) start=+1125ms dur=69ms',
+    '[mp-boot] pkg main inject=398ms',
+    '[mp-boot] pkg pkg-dart-0 inject=50ms',
+  ]);
 });

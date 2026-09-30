@@ -5,6 +5,7 @@ import 'package:yaml/yaml.dart';
 
 import 'asset_pipeline.dart';
 import 'cjk_font.dart';
+import 'config.dart' show kPreloadModes, kCjkBoldTimings, kBootAssetsModes;
 import 'emit_project.dart';
 import 'entrypoint.dart';
 
@@ -79,9 +80,24 @@ Future<SizeReport> runPipeline({
   String? fontBaseUrl,
   String? splashTitle,
   String? splashColor,
+  String preload = 'auto',
+  String cjkFontBoldTiming = 'after_first_frame',
+  bool earlyWasm = true,
+  String bootAssets = 'auto',
+  bool initialRenderingCache = true,
+  bool lazyCodeLoading = true,
 }) async {
   // 参数错误在构建前暴露,不白等一次 flutter build
   buildHostPageJs(verify: verify, forcePlatform: forcePlatform, semanticsMirror: semanticsMirror, perfHud: perfHud);
+  if (!kPreloadModes.contains(preload)) {
+    throw ArgumentError.value(preload, 'preload', '只能是 ${kPreloadModes.join(' / ')}');
+  }
+  if (!kCjkBoldTimings.contains(cjkFontBoldTiming)) {
+    throw ArgumentError.value(cjkFontBoldTiming, 'cjkFontBoldTiming', '只能是 ${kCjkBoldTimings.join(' / ')}');
+  }
+  if (!kBootAssetsModes.contains(bootAssets)) {
+    throw ArgumentError.value(bootAssets, 'bootAssets', '只能是 ${kBootAssetsModes.join(' / ')}');
+  }
   final remoteBase = fontBaseUrl == null ? null : normalizeFontBaseUrl(fontBaseUrl);
   final splashBg = normalizeSplashColor(splashColor ?? kDefaultSplashColor);
   final bin = resolveFlutterBin(flutterBin, projectPath: projectPath);
@@ -232,6 +248,43 @@ Future<SizeReport> runPipeline({
   emitBytes('$_wasmPackage/canvaskit.wasm.br', brTmp.readAsBytesSync(), _wasmPackage);
   wasmTmpDir.deleteSync(recursive: true);
 
+  // 6a. 运行时 JS 原样拷入(bom-shim / canvaskit-loader / boot)。放在资源装箱之前:
+  //     启动资源能不能并进主包要看主包已有多大(见下面 placeBootAssets)。
+  //
+  // 用 resolvePackageRoot 而不是 Platform.script 上溯:`dart run mp_flutter`
+  // 在消费者工程里跑的是编译好的 snapshot,Platform.script 指向消费者
+  // `.dart_tool` 下的临时产物,不在本包源码树下,固定上溯层数会跳到无关目录。
+  final runtimeDir =
+      Directory(p.join(await resolvePackageRoot(), 'runtime'));
+  for (final name in [
+    'bom-shim.js',
+    'canvaskit-loader.js',
+    'net.js',
+    'font-cache.js',
+    'typeface-memo.js',
+    'cjk-font.js',
+    'xhr.js',
+    'storage.js',
+    'image.js',
+    'wechat.js',
+    'safe-area.js',
+    'crypto.js',
+    'boot.js',
+    'shader-warmup.js',
+    'touch-bridge.js',
+    'text-bridge.js',
+    'native-views.js',
+    'semantics-mirror.js',
+  ]) {
+    emitText(name, File(p.join(runtimeDir.path, name)).readAsStringSync(), 'main');
+  }
+  // perf-hud.js 只在 --perf-hud 打开时才写进产物(M3):关闭时该文件完全不
+  // 出现在包体积里,承载页也不会 require 到它(见 buildHostPageJs)。
+  if (perfHud) {
+    emitText('perf-hud.js',
+        File(p.join(runtimeDir.path, 'perf-hud.js')).readAsStringSync(), 'main');
+  }
+
   // 6. 资源 → base64 模块,装箱到 pkg-assets-0..N
   final assetsDir = Directory(p.join(webDir.path, 'assets'));
   final assets = <String, List<int>>{};
@@ -295,11 +348,27 @@ Future<SizeReport> runPipeline({
     assets[kNoticesAsset] = const <int>[];
   }
 
-  // 资源分组:启动必需 → pkg-assets-boot(首帧前加载);NOTICES、回退字体
+  // 资源分组:启动必需 → pkg-assets-boot(首帧前加载;下面 placeBootAssets 默认把它并进主包);NOTICES、回退字体
   // (按码位邻近分组)、其余资源 → 按需分包。
   final fontRank = fallbackFontCodepointRank(flutterRootFromBin(bin));
-  final groups = planAssetGroups(assets,
+  final planned = planAssetGroups(assets,
       fontRank: fontRank, excludeFallbackFonts: remoteBase != null, warn: stderr.writeln);
+  // 冷启动 boot_assets:启动资源并进主包或 dart 分包,少一个首帧前分包请求。
+  // 主包此刻已有 canvaskit.js + 运行时 JS;加载表(每个资源约 400B)、承载页与
+  // 工程文件还没生成,按 64KB + 每资源 400B 预留。
+  final byPackage = <String, int>{};
+  for (final e in entries) {
+    byPackage[e.package] = (byPackage[e.package] ?? 0) + e.sourceBytes;
+  }
+  final placement = placeBootAssets(planned, assets,
+      mode: bootAssets,
+      mainBytes: (byPackage['main'] ?? 0) + 64 * 1024 + assets.length * 400,
+      dartPackageBytes: {for (final d in dartPackages) d: byPackage[d] ?? 0});
+  if (bootAssets != 'package' && placement.where == kBootAssetPackage &&
+      planned.any((g) => g.name == kBootAssetPackage)) {
+    stderr.writeln('ℹ️  启动资源主包/dart 分包都放不下,仍单独放在 $kBootAssetPackage 分包。');
+  }
+  final groups = placement.groups;
   final bundle = buildAssetBundle(assets, groups: groups);
   for (final m in bundle.modules) {
     emitText(m.modulePath, m.source, m.package);
@@ -347,48 +416,13 @@ Future<SizeReport> runPipeline({
           ? null
           : (asset: kCjkFontBoldAsset, package: kCjkFontBoldPackage, file: kCjkFontBoldFile),
       deferredSubPackages: bundle.bootPackageRoots,
+      wasmSubPackage: earlyWasm ? _wasmPackage : null,
     ),
     'main',
   );
 
-  // 7. 运行时 JS 原样拷入(bom-shim / canvaskit-loader / boot)
-  //
-  // 用 resolvePackageRoot 而不是 Platform.script 上溯:`dart run mp_flutter`
-  // 在消费者工程里跑的是编译好的 snapshot,Platform.script 指向消费者
-  // `.dart_tool` 下的临时产物,不在本包源码树下,固定上溯层数会跳到无关目录。
-  final runtimeDir =
-      Directory(p.join(await resolvePackageRoot(), 'runtime'));
-  for (final name in [
-    'bom-shim.js',
-    'canvaskit-loader.js',
-    'net.js',
-    'font-cache.js',
-    'typeface-memo.js',
-    'cjk-font.js',
-    'xhr.js',
-    'storage.js',
-    'image.js',
-    'wechat.js',
-    'safe-area.js',
-    'crypto.js',
-    'boot.js',
-    'shader-warmup.js',
-    'touch-bridge.js',
-    'text-bridge.js',
-    'native-views.js',
-    'semantics-mirror.js',
-  ]) {
-    emitText(name, File(p.join(runtimeDir.path, name)).readAsStringSync(), 'main');
-  }
-  // perf-hud.js 只在 --perf-hud 打开时才写进产物(M3):关闭时该文件完全不
-  // 出现在包体积里,承载页也不会 require 到它(见 buildHostPageJs)。
-  if (perfHud) {
-    emitText('perf-hud.js',
-        File(p.join(runtimeDir.path, 'perf-hud.js')).readAsStringSync(), 'main');
-  }
-
   // 8. 工程骨架(app.json / project.config.json / 承载页模板 / 分包占位页)。
-  //    预下载额度只有 2MB:按 wasm → 启动资源包 → dart 的顺序贪心挑,放不下的
+  //    预下载额度只有 2MB:按 preload 策略(默认 dart 优先)贪心挑,放不下的
   //    由启动器 require.async 各分包的就位探针显式拉取。按需分包不预下载——
   //    预下载了就又回到"不管用不用得到都先下载"。
   final packageBytes = <String, int>{};
@@ -400,12 +434,18 @@ Future<SizeReport> runPipeline({
     subPackageRoots: subPackages,
     entryPagePath: _entryPage,
     // 占位页是 emitProject 之后才计入各包的,额度留 8KB 余量
+    // 预下载额度 2MB,按 preload 策略给出的顺序贪心挑(见 preloadOrder)
     preloadRoots: selectPreloadPackages(
-        [
-          _wasmPackage, ...bundle.bootPackageRoots, if (cjkFont != null) kCjkFontPackage, ...dartPackages,
-          if (cjkFont != null && cjkFontBold != null) kCjkFontBoldPackage,
-        ], packageBytes,
+        preloadOrder(preload,
+            dartPackages: dartPackages,
+            bootAssetPackages: bundle.bootPackageRoots,
+            wasmPackage: _wasmPackage,
+            cjkPackage: cjkFont != null ? kCjkFontPackage : null,
+            cjkBoldPackage: cjkFont != null && cjkFontBold != null ? kCjkFontBoldPackage : null),
+        packageBytes,
         quotaBytes: kPreloadQuotaBytes - 8 * 1024),
+    initialRenderingCache: initialRenderingCache,
+    lazyCodeLoading: lazyCodeLoading,
     requireLocation: requireLocation,
     privateInfos: privateInfos,
     perfHud: perfHud,
@@ -422,7 +462,8 @@ Future<SizeReport> runPipeline({
   emitText('$_entryPage.js',
       buildHostPageJs(verify: verify, forcePlatform: forcePlatform, semanticsMirror: semanticsMirror,
           perfHud: perfHud, shaderWarmup: shaderWarmup, shaderWarmupLight: shaderWarmupLight,
-          bootStages: bootSubPackages.length + 4),
+          bootStages: bootSubPackages.length + 4,
+          earlyWasm: earlyWasm, cjkFontBoldTiming: cjkFontBoldTiming),
       'main');
 
   // 9. flutter_ohos 已知分叉差异 → 构建期警告(是 warning 不是 error,
@@ -489,6 +530,9 @@ const kForcePlatforms = ['ios', 'android', 'android-noIntl'];
 /// [bootStages] 是首帧前 boot() 会报的阶段数(每个启动分包一个,加
 /// canvaskit/crypto/dart-chunks/dart-main 四个),原生启动界面按已完成阶段数
 /// 估算进度条;`first-frame` 阶段移除启动界面。
+///
+/// [earlyWasm]/[cjkFontBoldTiming]:冷启动开关 `early_wasm`/`cjk_font_bold_timing`,
+/// 原样传给 boot()(见 boot.js)。
 String buildHostPageJs({
   required bool verify,
   String? forcePlatform,
@@ -497,6 +541,8 @@ String buildHostPageJs({
   bool shaderWarmup = true,
   bool shaderWarmupLight = false,
   int bootStages = 8,
+  bool earlyWasm = true,
+  String cjkFontBoldTiming = 'after_first_frame',
 }) {
   if (forcePlatform != null) {
     if (!verify) {
@@ -522,13 +568,16 @@ String buildHostPageJs({
       : '';
   final stageArg = ',\n        onStage: (stage) => { $perfHudStageArg'
       'this.mpBootStage(stage); }'
-      '${perfHud ? ',\n        perfLog: (line) => console.log(line),\n        frameProf: __mpFrameProf' : ''}'
+      '${perfHud ? ',\n        perfLog: (line) => console.log(line),\n        frameProf: __mpFrameProf,\n        pkgTrace: __mpPkgTrace' : ''}'
       // shader_warmup(默认开,见 shader-warmup.js);关闭时显式告诉 boot 不装。
       // shader_warmup_light:true 时只画轻项(文字/纯色/图片/圆/描边/路径…),
       // 跳过阴影/模糊/颜色矩阵/混合这类真机上单个 program 可达上百 ms 的重项
       // (见 shader-warmup.js buildCombos 的 heavy 标注),给低端机用。
       ',\n        shaderWarmup: $shaderWarmup'
-      ',\n        shaderWarmupLight: $shaderWarmupLight';
+      ',\n        shaderWarmupLight: $shaderWarmupLight'
+      // 冷启动开关(见 boot.js):wasm 就位就编译;粗体首帧后才请求
+      ',\n        earlyWasm: $earlyWasm'
+      ',\n        cjkBoldTiming: ${jsonEncode(cjkFontBoldTiming == 'eager' ? 'eager' : 'after-first-frame')}';
   return '''
 Page({
   data: { mpError: '', mpInput: { visible: false }, mpNative: {}, mpNativeList: [], mpSemantics: [],
@@ -735,12 +784,17 @@ const _semanticsMirrorInitSnippet = '''
 const _perfHudBootTimerSnippet = '''
       let __mpBootTimer = null;
       let __mpFrameProf = null;
+      let __mpPkgTrace = null;
       try {
-        const { createBootTimer, createFrameProf } = require('../../perf-hud.js');
-        __mpFrameProf = createFrameProf();
+        const hud = require('../../perf-hud.js');
+        __mpFrameProf = hud.createFrameProf();
         const app = getApp();
-        __mpBootTimer = createBootTimer({ t0: (app && app.__mpBootT0) || Date.now() });
+        const t0 = (app && app.__mpBootT0) || Date.now();
+        __mpBootTimer = hud.createBootTimer({ t0 });
         __mpBootTimer.mark('onLoad');
+        // 分包时间线:每个分包 req/下载窗/注入耗时(wx.getPerformance),首帧后打
+        try { __mpPkgTrace = hud.createPkgTrace({ t0, wx }); }
+        catch (e) { console.error('[mp-perf] 分包时间线初始化失败: ' + ((e && e.message) || e)); }
       } catch (e) { console.error('[mp-perf] 启动计时初始化失败: ' + ((e && e.message) || e)); }
 ''';
 

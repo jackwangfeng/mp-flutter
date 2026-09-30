@@ -174,4 +174,23 @@ run(false).then((a) => run(true).then((b) => console.log(a + ' ' + b)));
     final r = await Process.run('node', ['--check', f.path]);
     expect(r.exitCode, 0, reason: r.stderr.toString());
   });
+
+  test('wasmSubPackage 写进加载表(boot 据此一到 wasm 就编译 CanvasKit);不传就不写', () {
+    final s = buildLoaderManifest(dartModulePaths: ['pkg-dart-0/dart.js'],
+        subPackages: const ['pkg-dart-0', 'pkg-wasm'], assets: buildAssetBundle({}), wasmSubPackage: 'pkg-wasm');
+    expect(s, contains('wasmSubPackage: "pkg-wasm",'));
+    expect(src, isNot(contains('wasmSubPackage')));
+  });
+
+  test('并进主包的启动资源直接 require.async,不经分包门控', () {
+    final assets = {'assets/FontManifest.json': [1], 'assets/a.png': [2]};
+    final r = placeBootAssets(planAssetGroups(assets), assets, mode: 'main', mainBytes: 0);
+    final b = buildAssetBundle(assets, groups: r.groups);
+    final s = buildLoaderManifest(dartModulePaths: ['pkg-dart-0/dart.js'],
+        subPackages: const ['pkg-dart-0', 'pkg-wasm'], assets: b);
+    final line = s.split('\n').firstWhere((l) => l.contains('"assets/FontManifest.json"'));
+    expect(line, contains('require.async("./$kMainBootAssetDir/'));
+    expect(line, isNot(contains('inPkg')));
+    expect(s, isNot(contains('deferredSubPackages')));
+  });
 }

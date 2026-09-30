@@ -420,7 +420,7 @@ test('合一字体:boot 一开始就读(早于 CanvasKit),引擎取用时直接�
   }
 });
 
-test('合一字体粗体:排在 dart/wasm 分包请求之后读;不晚于常规就随清单应答,晚到则 404 + self.__mpLateFonts 补交', async () => {
+test('合一字体粗体(cjkBoldTiming=eager):排在 dart/wasm 分包请求之后读;不晚于常规就随清单应答,晚到则 404 + self.__mpLateFonts 补交', async () => {
   for (const boldDelay of [1, 40]) {
     const c = createMpContext();
     c.stubModule(path.join(RT, 'canvaskit.js'), function () {});
@@ -456,7 +456,7 @@ test('合一字体粗体:排在 dart/wasm 分包请求之后读;不晚于常规�
         });
       },
     };
-    const r = await boot({ canvas: c.canvas, manifest, cssWidth: 390, cssHeight: 844, perfLog: (l) => lines.push(l) });
+    const r = await boot({ canvas: c.canvas, manifest, cssWidth: 390, cssHeight: 844, perfLog: (l) => lines.push(l), cjkBoldTiming: 'eager' });
     assert.deepStrictEqual(events, ['load pkg-cjk', 'load pkg-dart-0', 'load pkg-cjkb']);
     const bridge = r.shim.self.__mpLateFonts;
     assert.ok(bridge && typeof bridge.listen === 'function');
@@ -546,4 +546,198 @@ test('启动资源包加载失败:boot 以点名分包的错误失败,不调 ini
     'pkg-assets-boot': () => Promise.reject(new Error('net down')),
   }, ['pkg-assets-boot'], events), /分包 pkg-assets-boot 加载失败: net down/);
   assert.ok(events.indexOf('initializeEngine') < 0);
+});
+
+// ---- 冷启动优化(coldstart) ----
+
+function stubCK(c, CK, events, delayMs) {
+  c.stubModule(path.join(RT, 'canvaskit.js'), function () {});
+  c.stubModule(path.join(RT, 'canvaskit-loader.js'), {
+    loadCanvasKit: () => {
+      if (events) events.push('canvaskit');
+      return delayMs ? new Promise((r) => setTimeout(() => r(CK), delayMs)) : Promise.resolve(CK);
+    },
+    routeImageElements: require(path.join(RT, 'canvaskit-loader.js')).routeImageElements,
+  });
+}
+
+function engineManifest(c, extra, events) {
+  return Object.assign({
+    subPackages: {}, assets: {},
+    loadDart: () => {
+      if (events) events.push('loadDart');
+      c.requireModule(path.join(RT, 'bom-shim.js')).self._flutter.loader.didCreateEngineInitializer({
+        initializeEngine() { return Promise.resolve({ runApp() { return Promise.resolve(); } }); },
+      });
+      return Promise.resolve();
+    },
+  }, extra);
+}
+
+test('early_wasm:pkg-wasm 一到就编译 CanvasKit,不等 dart 分包;loadDart 仍在 dart 分包就位之后', async () => {
+  const c = createMpContext();
+  const events = [];
+  stubCK(c, {}, events);
+  const { boot } = c.requireModule(path.join(RT, 'boot.js'));
+  let releaseDart;
+  const dartGate = new Promise((r) => { releaseDart = r; });
+  const notes = [];
+  const p = boot({
+    canvas: c.canvas, cssWidth: 390, cssHeight: 844,
+    pkgTrace: { issued() {}, ready() {}, note: (k, ms) => notes.push(k) },
+    manifest: engineManifest(c, {
+      wasmSubPackage: 'pkg-wasm',
+      subPackages: {
+        'pkg-dart-0': () => dartGate.then(() => events.push('dart-pkg')),
+        'pkg-wasm': () => { events.push('wasm-pkg'); return Promise.resolve(); },
+      },
+    }, events),
+  });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.deepStrictEqual(events, ['wasm-pkg', 'canvaskit'], 'dart 分包没到,CanvasKit 已开始编译,Dart 还没执行');
+  releaseDart();
+  await p;
+  assert.deepStrictEqual(events, ['wasm-pkg', 'canvaskit', 'dart-pkg', 'loadDart']);
+  assert.deepStrictEqual(notes, ['ck-wait-dart']);
+});
+
+test('early_wasm 关闭(earlyWasm:false)或加载表没有 wasmSubPackage:全部分包就位才编译(旧行为)', async () => {
+  for (const variant of [{ earlyWasm: false, wasmSubPackage: 'pkg-wasm' }, { wasmSubPackage: undefined }]) {
+    const c = createMpContext();
+    const events = [];
+    stubCK(c, {}, events);
+    const { boot } = c.requireModule(path.join(RT, 'boot.js'));
+    let releaseDart;
+    const dartGate = new Promise((r) => { releaseDart = r; });
+    const p = boot({
+      canvas: c.canvas, cssWidth: 390, cssHeight: 844, earlyWasm: variant.earlyWasm,
+      manifest: engineManifest(c, {
+        wasmSubPackage: variant.wasmSubPackage,
+        subPackages: {
+          'pkg-dart-0': () => dartGate.then(() => events.push('dart-pkg')),
+          'pkg-wasm': () => { events.push('wasm-pkg'); return Promise.resolve(); },
+        },
+      }, events),
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.deepStrictEqual(events, ['wasm-pkg']);
+    releaseDart();
+    await p;
+    assert.deepStrictEqual(events, ['wasm-pkg', 'dart-pkg', 'canvaskit', 'loadDart']);
+  }
+});
+
+test('early_wasm:dart 分包失败时 boot 以点名分包的错误失败(CanvasKit 已编译也不吞错)', async () => {
+  const c = createMpContext();
+  stubCK(c, {}, null);
+  const { boot } = c.requireModule(path.join(RT, 'boot.js'));
+  await assert.rejects(boot({
+    canvas: c.canvas, cssWidth: 390, cssHeight: 844,
+    manifest: engineManifest(c, {
+      wasmSubPackage: 'pkg-wasm',
+      subPackages: { 'pkg-dart-0': () => Promise.reject(new Error('net down')), 'pkg-wasm': () => Promise.resolve() },
+    }),
+  }), /分包 pkg-dart-0 加载失败: net down/);
+});
+
+test('--perf-hud 分包时间线:每个首帧前分包与合一字体分包都报 issued → ready', async () => {
+  const c = createMpContext();
+  stubCK(c, {}, null);
+  c.wx.getFileSystemManager = () => ({ readCompressedFile(o) { o.success({ data: new Uint8Array([1]).buffer }); } });
+  const { boot } = c.requireModule(path.join(RT, 'boot.js'));
+  const log = [];
+  await boot({
+    canvas: c.canvas, cssWidth: 390, cssHeight: 844,
+    pkgTrace: { issued: (n) => log.push('issued ' + n), ready: (n) => log.push('ready ' + n), note() {} },
+    manifest: engineManifest(c, {
+      wasmSubPackage: 'pkg-wasm',
+      subPackages: { 'pkg-dart-0': () => Promise.resolve(), 'pkg-wasm': () => Promise.resolve() },
+      cjkFont: { key: 'k', file: '/pkg-cjk/mp-cjk.ttf.br', load: () => Promise.resolve() },
+    }),
+  });
+  for (const n of ['pkg-dart-0', 'pkg-wasm', 'pkg-cjk']) {
+    assert.ok(log.indexOf('issued ' + n) >= 0 && log.indexOf('issued ' + n) < log.indexOf('ready ' + n), n + ': ' + log.join(','));
+  }
+});
+
+test('合一字体粗体(默认 after_first_frame):首帧提交之前不请求分包,引擎取用 404;首帧后才读,空闲时补注册', async () => {
+  const c = createMpContext();
+  function FakeSurface() {}
+  FakeSurface.prototype.flush = function () { return 'flushed'; };
+  const make = () => { const h = { clone: () => h, delete() {}, isDeleted: () => false }; return h; };
+  const CK = { Surface: FakeSurface, Typeface: { MakeTypefaceFromData: make, MakeFreeTypeFaceFromData: make } };
+  stubCK(c, CK, null);
+  c.wx.getFileSystemManager = () => ({
+    readCompressedFile(o) { setTimeout(() => o.success({ data: new Uint8Array(o.filePath.indexOf('cjkb') >= 0 ? [7, 7] : [1]).buffer }), 1); },
+  });
+  const { boot } = c.requireModule(path.join(RT, 'boot.js'));
+  const events = [];
+  let boldStatus;
+  const manifest = {
+    subPackages: {}, assets: {},
+    cjkFont: { key: 'assets/mp-cjk/NotoSansSC.ttf', family: 'MpNotoSansSC', file: '/pkg-cjk/mp-cjk.ttf.br', load: () => Promise.resolve() },
+    cjkFontBold: { key: 'assets/mp-cjk/NotoSansSC-Bold.ttf', family: 'MpNotoSansSC', file: '/pkg-cjkb/mp-cjk-bold.ttf.br',
+      load: () => { events.push('load pkg-cjkb'); return Promise.resolve(); } },
+    loadDart: () => {
+      const self = c.requireModule(path.join(RT, 'bom-shim.js')).self;
+      return self.fetch('assets/mp-cjk/NotoSansSC-Bold.ttf').then((r) => {
+        boldStatus = r.status;
+        self._flutter.loader.didCreateEngineInitializer({
+          initializeEngine() { return Promise.resolve({ runApp() { return Promise.resolve(); } }); },
+        });
+      });
+    },
+  };
+  const r = await boot({ canvas: c.canvas, manifest, cssWidth: 390, cssHeight: 844 });
+  await new Promise((res) => setTimeout(res, 30));
+  assert.deepStrictEqual(events, [], '首帧之前不应请求粗体分包');
+  assert.strictEqual(boldStatus, 404);
+  const got = [];
+  r.shim.self.__mpLateFonts.listen((b, fam) => got.push([Array.from(b), fam]));
+  new FakeSurface().flush();   // 首帧提交
+  await new Promise((res) => setTimeout(res, 30));
+  assert.deepStrictEqual(events, ['load pkg-cjkb']);
+  assert.deepStrictEqual(got, [], '字节到了也要等空闲(最近 300ms 无帧)再补注册');
+  new FakeSurface().flush();   // 还在画帧
+  await new Promise((res) => setTimeout(res, 200));
+  assert.deepStrictEqual(got, []);
+  await new Promise((res) => setTimeout(res, 400));
+  assert.deepStrictEqual(got, [[[7, 7], 'MpNotoSansSC']]);
+  assert.strictEqual(r.shim.cjkBold.state.status, 'late-loaded');
+  assert.strictEqual(FakeSurface.prototype.flush(), 'flushed', '空闲等待的 flush 包装做完即还原');
+});
+
+test('whenIdle:手指按着或最近有帧就等;都没有才做;最多等 10s', () => {
+  const { whenIdle } = require(path.join(RT, 'boot.js'));
+  let t = 0;
+  const timers = [];
+  const setT = (fn, ms) => timers.push({ fn, at: t + ms });
+  const run = (until) => {
+    while (timers.length) {
+      timers.sort((a, b) => a.at - b.at);
+      if (timers[0].at > until) break;
+      const x = timers.shift(); t = x.at; x.fn();
+    }
+    t = until;
+  };
+  function S() {}
+  S.prototype.flush = function () {};
+  const orig = S.prototype.flush;
+  const ps = { down: 1 };
+  let done = 0;
+  whenIdle(() => ({ Surface: S }), ps, () => done++, { now: () => t, setTimeout: setT });
+  run(1000);
+  assert.strictEqual(done, 0, '手指按着');
+  ps.down = 0;
+  new S().flush();
+  run(1200);
+  assert.strictEqual(done, 0, '200ms 前还有帧');
+  run(1400);
+  assert.strictEqual(done, 1);
+  assert.strictEqual(S.prototype.flush, orig);
+  // 一直在画:10s 后照做
+  let done2 = 0;
+  whenIdle(() => ({ Surface: S }), { down: 0 }, () => done2++, { now: () => t, setTimeout: setT });
+  for (let i = 0; i < 120; i++) { run(t + 90); new S().flush(); }
+  assert.strictEqual(done2, 1);
 });

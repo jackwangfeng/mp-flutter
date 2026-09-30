@@ -65,6 +65,161 @@ function createBootTimer(opts) {
   return { mark: mark, finish: finish };
 }
 
+/**
+ * 冷启动分包时间线(--perf-hud,冷启动方案第 0 步):每个分包一行
+ * `[mp-boot] pkg <name> req=+x dl=+a..+b inject=c ready=+y`。
+ *
+ *   · req   —— boot 发出 require.async(就位探针)的时刻(boot.js 经 opts.pkgTrace.issued 报);
+ *   · ready —— require.async resolve 的时刻(pkgTrace.ready);
+ *   · dl    —— 微信 `wx.getPerformance()` 的 `loadPackage`(downloadPackage)条目:
+ *              该分包真实的下载时间窗(基础库 2.11.0+);
+ *   · inject—— `script`(evaluateScript)条目里属于该分包的 JS 注入耗时之和;
+ *   · size  —— loadPackage 条目的 packageSize。
+ * 所有时刻都相对 t0(App.onLaunch)。getPerformance/createObserver 不可用、或
+ * 条目里没有某字段时,对应字段静默省略——req/ready 是自己计的时,总有。
+ * 另外 `navigation`/`render` 条目(appLaunch、firstRender……)各打一行
+ * `[mp-boot] wx <name> start=+x dur=y`,补上 onLaunch 之前看不到的那一段。
+ *
+ * 首帧后 [REPORT_DELAY_MS] 统一打一遍(observer 回调是异步的,留时间让条目
+ * 到齐);之后才完成的分包(首帧后才请求的粗体等)ready 后 [LATE_DELAY_MS] 补打。
+ */
+function createPkgTrace(opts) {
+  const o = opts || {};
+  const t0 = o.t0;
+  const now = o.now || Date.now;
+  const log = o.log || console.log;
+  const setT = o.setTimeout || setTimeout;
+  const wxApi = o.wx || null;
+  const REPORT_DELAY_MS = o.reportDelayMs != null ? o.reportDelayMs : 1500;
+  const LATE_DELAY_MS = o.lateDelayMs != null ? o.lateDelayMs : 800;
+  const pkgs = {};       // name → { req, ready, dlStart, dlEnd, size, inject, printed }
+  const order = [];
+  const wxLines = [];
+  let reported = false;
+  let toEpoch = null;    // 把 performance 条目的 startTime 换算成 Date.now 口径
+
+  function pkg(name) {
+    if (!pkgs[name]) { pkgs[name] = { inject: 0 }; order.push(name); }
+    return pkgs[name];
+  }
+  function normName(n) {
+    if (n == null) return null;
+    let s = String(n).replace(/^\/+|\/+$/g, '');
+    if (s === '' || s === '__APP__' || s === 'APP' || s === 'main') s = 'main';
+    return s;
+  }
+  function epoch(t) {
+    if (typeof t !== 'number' || !isFinite(t)) return null;
+    if (t > 1e12) return t;               // 已经是时间戳
+    return toEpoch == null ? null : t + toEpoch;
+  }
+  function pkgOfFile(f) {
+    const s = String(f || '').replace(/^\/+/, '');
+    const seg = s.split('/')[0];
+    return seg && seg.indexOf('pkg-') === 0 ? seg : 'main';
+  }
+  function onEntry(e) {
+    if (!e) return;
+    try {
+      const type = e.entryType;
+      const start = epoch(e.startTime);
+      const dur = typeof e.duration === 'number' ? e.duration : null;
+      if (type === 'loadPackage') {
+        const name = normName(e.packageName != null ? e.packageName : e.moduleName);
+        if (!name || start == null) return;
+        const p = pkg(name);
+        const end = start + (dur || 0);
+        p.dlStart = p.dlStart == null ? start : Math.min(p.dlStart, start);
+        p.dlEnd = p.dlEnd == null ? end : Math.max(p.dlEnd, end);
+        if (e.packageSize != null) p.size = e.packageSize;
+      } else if (type === 'script') {
+        if (dur == null) return;
+        // 真机/开发者工具的 evaluateScript 条目用 moduleName('__APP__' 或分包 root)
+        let name = normName(e.packageName != null ? e.packageName : e.moduleName);
+        if (!name) {
+          const files = e.fileList || [];
+          name = files.length ? pkgOfFile(files[0]) : 'main';
+        }
+        pkg(name).inject += dur;
+      } else if (type === 'navigation' || type === 'render') {
+        wxLines.push('[mp-boot] wx ' + e.name + (e.navigationType ? '(' + e.navigationType + ')' : '') + (start != null ? ' start=' + fmt(start - t0) : '') +
+          (dur != null ? ' dur=' + Math.round(dur) + 'ms' : ''));
+      }
+    } catch (err) { /* 单条解析失败不影响其余 */ }
+  }
+  function fmt(ms) { const r = Math.round(ms); return (r >= 0 ? '+' : '') + r + 'ms'; }
+
+  // wx.getPerformance:没有就静默跳过(旧基础库、单测环境)
+  try {
+    const perf = wxApi && typeof wxApi.getPerformance === 'function' ? wxApi.getPerformance() : null;
+    if (perf) {
+      if (typeof perf.now === 'function') {
+        const pn = perf.now();
+        if (typeof pn === 'number' && pn < 1e12) toEpoch = now() - pn;
+      }
+      if (typeof perf.getEntries === 'function') {
+        const buffered = perf.getEntries();
+        if (buffered && buffered.forEach) buffered.forEach(onEntry);
+      }
+      if (typeof perf.createObserver === 'function') {
+        const obs = perf.createObserver(function (list) {
+          try {
+            const es = list && typeof list.getEntries === 'function' ? list.getEntries() : list;
+            if (es && es.forEach) es.forEach(onEntry);
+          } catch (err) { /* 忽略 */ }
+        });
+        if (obs && typeof obs.observe === 'function') {
+          obs.observe({ entryTypes: ['loadPackage', 'script', 'navigation', 'render'] });
+        }
+      }
+    }
+  } catch (err) { /* API 不可用:静默跳过,只剩 req/ready */ }
+
+  function line(name) {
+    const p = pkgs[name];
+    let s = '[mp-boot] pkg ' + name;
+    if (p.req != null) s += ' req=' + fmt(p.req - t0);
+    if (p.dlStart != null) s += ' dl=' + fmt(p.dlStart - t0) + '..' + fmt(p.dlEnd - t0);
+    if (p.inject > 0) s += ' inject=' + Math.round(p.inject) + 'ms';
+    if (p.ready != null) s += ' ready=' + fmt(p.ready - t0);
+    if (p.size != null) s += ' size=' + Math.round(p.size / 1024) + 'KB';
+    return s;
+  }
+  function out(s) { try { log(s); } catch (e) { /* console 不可用不影响启动 */ } }
+  function report() {
+    reported = true;
+    wxLines.splice(0).forEach(out);
+    order.forEach(function (name) {
+      const p = pkgs[name];
+      if (p.printed) return;
+      // 只 req 了还没 ready 的(首帧后才请求、还在下载)等它 ready 再补
+      if (p.req != null && p.ready == null) return;
+      if (p.req == null && p.dlStart == null && !(p.inject > 0)) return;
+      p.printed = true;
+      out(line(name));
+    });
+  }
+
+  return {
+    /** boot 发出某分包的 require.async 时调用。 */
+    issued: function (name) { const p = pkg(name); if (p.req == null) p.req = now(); },
+    /** 该分包的 require.async resolve 时调用。 */
+    ready: function (name) {
+      const p = pkg(name);
+      if (p.ready == null) p.ready = now();
+      if (reported) setT(report, LATE_DELAY_MS);
+    },
+    /** 任意一行附加计时(如 ck-wait-dart)。 */
+    note: function (label, ms) { out('[mp-boot] ' + label + ' ' + Math.round(ms) + 'ms'); },
+    /** 首帧提交时调用:稍后统一打一遍。 */
+    firstFrame: function () { setT(report, REPORT_DELAY_MS); },
+    report: report,
+    // 单测用
+    _onEntry: onEntry,
+    _pkgs: pkgs,
+  };
+}
+
 /** 递归收集 [gl] 自身与原型链上所有函数属性名(WebGL 方法通常挂在原型上)。 */
 function glMethodNames(gl) {
   const names = new Set();
@@ -920,4 +1075,4 @@ function createPerfHud(opts) {
   return { start: start, stop: stop, report: report, setVisible: setVisible, note: note };
 }
 
-module.exports = { createBootTimer, createPerfHud, createFrameProf, programDigest, glMethodNames, sfntWeight };
+module.exports = { createBootTimer, createPkgTrace, createPerfHud, createFrameProf, programDigest, glMethodNames, sfntWeight };

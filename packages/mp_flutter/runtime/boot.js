@@ -12,15 +12,19 @@ const { createNet, makeFetch } = require('./net.js');
  *   3. 把 CanvasKit 挂到 window/self 的 flutterCanvasKit —— 引擎读到就不再下载
  *   4. 布好 _flutter 握手位,再加载 main.dart.js
  *
- * 在这之前先并行拉齐**首帧前必需**的分包(main.dart.js 各分片、wasm、启动
- * 资源包 pkg-assets-boot:FontManifest/AssetManifest/清单里声明的字体/Roboto/
- * 常用汉字合一字体)。启动资源包列在 deferredSubPackages 里:不挡 CanvasKit
- * 初始化与 Dart 分片执行,initializeEngine 之前才等齐。
+ * 在这之前先并行拉齐**首帧前必需**的分包(main.dart.js 各分片、wasm;启动资源
+ * ——FontManifest/AssetManifest/清单里声明的字体/Roboto——默认并进主包或 dart
+ * 分包,放不下时才是单独的 pkg-assets-boot,列在 deferredSubPackages 里:不挡
+ * CanvasKit 初始化与 Dart 分片执行,initializeEngine 之前才等齐)。
+ * 冷启动(early_wasm,默认开):加载表写了 wasmSubPackage 时,wasm 分包一到就
+ * 编译 CanvasKit,与 dart 分包的下载/注入并行;两边都就位才进入 1–4。
+ * 常用汉字合一字体(pkg-cjk)boot 一开始就读;粗体(pkg-cjkb)默认首帧之后才
+ * 请求,晚到的补注册安排在空闲时(见 cjk-font.js)。
  * 其余资源分包(NOTICES、回退字体分片、图片、shader)不在这张表里:引擎
  * fetch 某个资源时,由该资源在加载表里的 require.async 按需下载所在分包。
  *
  * [opts.manifest] 是构建期生成的加载表 `mp-manifest.js`:
- *   { subPackages: { 分包名: () => Promise }, deferredSubPackages: [分包名],
+ *   { subPackages: { 分包名: () => Promise }, deferredSubPackages: [分包名], wasmSubPackage?,
  *     loadDart: () => Promise, assets: { 原始路径: () => Promise<base64> },
  *     remoteFonts?, cjkFont?, cjkFontBold? }
  * 主包不能同步 require 分包 JS,所以 main.dart.js 与资源都经它 require.async。
@@ -58,6 +62,20 @@ function boot(opts) {
   // --perf-hud(默认关):首帧前的诊断行(常用汉字合一字体的 fetch/解析耗时)。
   // 稳态的 perf-hud 在 boot 之后才装,看不到首帧前的这些事。
   const perfLog = typeof opts.perfLog === 'function' ? opts.perfLog : null;
+  // --perf-hud(默认关):分包时间线(perf-hud.js createPkgTrace)。每个分包
+  // require.async 发出/resolve 时各通知一次,由它结合 wx.getPerformance 的
+  // 下载/注入条目打 `[mp-boot] pkg <name> req=… dl=… inject=…`。
+  const trace = opts.pkgTrace && typeof opts.pkgTrace.issued === 'function' ? opts.pkgTrace : null;
+
+  // 首帧提交(下面 Surface.flush 的首帧钩子 resolve)。粗体字体
+  // (cjk_font_bold_timing: after_first_frame,默认)等它之后才请求分包。
+  let resolveFirstFrame;
+  const firstFrame = new Promise(function (r) { resolveFirstFrame = r; });
+  // 承载页在 onMpTouch 里维护(touchstart 计数、touchend/touchcancel/onHide
+  // 清零),shim 建好后挂到 shim.pointerState 上供页面写。着色器预热与粗体
+  // 补注册的空闲判断都读它——手指按着时不抢交互。
+  const pointerState = { down: 0 };
+  let ckRef = null;
 
   // crypto.getRandomValues(K4)播种(I1 修复,2026-09-28 终审):与分包/CanvasKit
   // 加载并行发起,而不是等到那条链子全部跑完、只剩 loadDart 前才开始——一次
@@ -96,7 +114,8 @@ function boot(opts) {
   // 编译、Dart 分片加载并行;引擎初始化取字体时只等这个结果。
   const cjkSpec = manifest.cjkFont && typeof manifest.cjkFont.load === 'function' ? manifest.cjkFont : null;
   const cjkBytes = cjkSpec
-    ? require('./cjk-font.js').preloadCjkFont(cjkSpec, { wx: wx, perfLog: perfLog })
+    ? require('./cjk-font.js').preloadCjkFont(cjkSpec, Object.assign({ wx: wx, perfLog: perfLog },
+      traceHooks(trace, pkgOfFile(cjkSpec.file))))
     : null;
   const boldSpec = cjkSpec && manifest.cjkFontBold && typeof manifest.cjkFontBold.load === 'function'
     ? manifest.cjkFontBold : null;
@@ -107,28 +126,66 @@ function boot(opts) {
   Object.keys(allLoaders).forEach(function (n) {
     (deferredNames.indexOf(n) >= 0 ? late : early)[n] = allLoaders[n];
   });
-  // 先发 dart/wasm 分包的请求,再发启动资源包的:开发者工具里分包是逐个注入的,
-  // 先发先到,资源包的下载/注入落在 CanvasKit 初始化与 Dart 分片执行期间
-  const earlyLoaded = loadSubpackages(early, onStage);
-  const lateLoaded = loadSubpackages(late, onStage);
-  // 合一字体粗体(cjk_font_bold):排在 dart/wasm/启动资源包请求之后再拉,不挤占
-  // 关键路径;首帧不等它,晚到就首帧后补注册(见 cjk-font.js createCjkBold)
+  // wasm 就位就编译(early_wasm,默认开):CanvasKit 只依赖 pkg-wasm,不必等
+  // dart 分包。把 wasm 单独拆出来,`WXWebAssembly.instantiate` 与 dart 分包的
+  // 下载/注入并行;两边都就位后再装垫片、执行 Dart——"CanvasKit 先于 BOM 垫片"
+  // 与"垫片先于 main.dart.js"两条顺序约束都不变。加载表没写 wasmSubPackage
+  // (旧产物)或 earlyWasm === false 时退回"全部就位再编译"。
+  const wasmName = opts.earlyWasm !== false && manifest.wasmSubPackage &&
+    typeof early[manifest.wasmSubPackage] === 'function' ? manifest.wasmSubPackage : null;
+  const dartPkgs = {}, wasmPkg = {};
+  Object.keys(early).forEach(function (n) { (n === wasmName ? wasmPkg : dartPkgs)[n] = early[n]; });
+  // 先发 dart 分包的请求,再发 wasm、启动资源包的:开发者工具里分包是逐个注入的,
+  // 先发先到;dart 分包要在 JS 线程上注入(解析 ~2MB 源码),先到才能和 wasm
+  // 下载重叠
+  const dartLoaded = loadSubpackages(dartPkgs, onStage, trace);
+  const wasmLoaded = loadSubpackages(wasmPkg, onStage, trace);
+  const lateLoaded = loadSubpackages(late, onStage, trace);
+  // 合一字体粗体(cjk_font_bold):默认首帧之后才请求(opts.cjkBoldTiming !==
+  // 'eager'),不与首帧前必需的分包抢带宽;首帧不等它,晚到就首帧后空闲时补
+  // 注册(见 cjk-font.js createCjkBold)
+  const boldAfterFirstFrame = opts.cjkBoldTiming !== 'eager';
   const cjkBold = boldSpec
-    ? require('./cjk-font.js').createCjkBold(boldSpec, cjkBytes, { wx: wx, perfLog: perfLog })
+    ? require('./cjk-font.js').createCjkBold(boldSpec, cjkBytes, Object.assign({
+      wx: wx, perfLog: perfLog,
+      startAfter: boldAfterFirstFrame ? firstFrame : null,
+      whenIdle: function (fn) { whenIdle(function () { return ckRef; }, pointerState, fn); },
+    }, traceHooks(trace, pkgOfFile(boldSpec.file))))
     : null;
   // 先挂一个空的 catch,免得启动资源包先失败时成为未处理的 rejection;
   // 真正的失败在下面 initializeEngine 之前被 await 出来,走同一条报错路径
   lateLoaded.catch(function () {});
-  return earlyLoaded
-    .then(function () {
-      return loadCanvasKit({ canvas: canvas, wasmPath: wasmPath, canvasKitInit: CanvasKitInit });
-    })
+  const startCanvasKit = function () {
+    return loadCanvasKit({ canvas: canvas, wasmPath: wasmPath, canvasKitInit: CanvasKitInit })
+      .then(function (CK) {
+        // 微信没有细分"读取 wasm 字节/编译/实例化"三个子阶段的 API
+        // (WXWebAssembly.instantiate 是一次性完成的黑盒调用,见
+        // canvaskit-loader.js `loadCanvasKit` 的 `instantiateWasm`),这里按
+        // loadCanvasKit() 整体耗时报一个合并阶段。
+        if (onStage) onStage('canvaskit');
+        return CK;
+      });
+  };
+  let ckReady;
+  if (wasmName) {
+    let ckAt = 0, dartAt = 0;
+    const ckP = wasmLoaded.then(startCanvasKit).then(function (CK) { ckAt = Date.now(); return CK; });
+    const dartP = dartLoaded.then(function () { dartAt = Date.now(); });
+    // 任何一边先失败都走下面同一条报错路径;另一边的 rejection 先挂空 catch
+    ckP.catch(function () {});
+    dartP.catch(function () {});
+    ckReady = Promise.all([ckP, dartP]).then(function (r) {
+      // ck-wait-dart = dart 分包全部就位 − CanvasKit 就绪:为正说明编译已完全
+      // 藏在 dart 分包下载/注入后面
+      if (trace && typeof trace.note === 'function') trace.note('ck-wait-dart', dartAt - ckAt);
+      return r[0];
+    });
+  } else {
+    ckReady = Promise.all([dartLoaded, wasmLoaded]).then(startCanvasKit);
+  }
+  return ckReady
     .then(function (CK) {
-      // 微信没有细分"读取 wasm 字节/编译/实例化"三个子阶段的 API
-      // (WXWebAssembly.instantiate 是一次性完成的黑盒调用,见
-      // canvaskit-loader.js `loadCanvasKit` 的 `instantiateWasm`),这里按
-      // loadCanvasKit() 整体耗时报一个合并阶段。
-      if (onStage) onStage('canvaskit');
+      ckRef = CK;
       // 同一份字体字节只解析一次(见 typeface-memo.js):引擎每注册一批回退字体
       // 都把迄今全部字体重新 registerFont 一遍,不去重时第 k 批要把前面所有字体
       // 再解析一遍。必须在引擎开始注册字体(initializeEngine)之前装上。
@@ -159,7 +216,6 @@ function boot(opts) {
       // touchcancel/onHide 清零),shim 建好后挂到 shim.pointerState 上
       // (下面 bom.install 之后)供页面写。这里先建对象、传引用给预热——手指
       // 按下时(哪怕引擎这一刻还没因为按下就 flush)也要整体暂停,不抢交互。
-      const pointerState = { down: 0 };
       if (opts.shaderWarmup !== false) {
         try {
           let warmFont = null;
@@ -177,7 +233,7 @@ function boot(opts) {
       // 首帧提交:包一次 Surface.prototype.flush,第一次调用时报阶段并立即
       // 还原(只报一次,不影响后续每帧真实的 flush 调用)。必须趁 CK 刚拿到、
       // 垫片/引擎都还没开始画之前包上,否则真机上首帧可能已经在这之前画完。
-      if (onStage) {
+      {
         try {
           const proto = CK.Surface && CK.Surface.prototype;
           if (proto && typeof proto.flush === 'function') {
@@ -190,7 +246,9 @@ function boot(opts) {
               if (proto.flush === firstFrameHook) proto.flush = origFlush;
               if (!firstFrameHook.done) {
                 firstFrameHook.done = true;
-                onStage('first-frame');
+                if (onStage) onStage('first-frame');
+                if (trace && typeof trace.firstFrame === 'function') trace.firstFrame();
+                resolveFirstFrame();
               }
               return origFlush.apply(this, arguments);
             };
@@ -387,6 +445,9 @@ function boot(opts) {
       }).then(function (app) {
         return app.runApp();
       }).then(function () {
+        // 兜底:首帧钩子没装上/没触发(Surface.flush 包装失败等)时,runApp
+        // 之后 3 秒也放行等首帧的事(粗体请求),不能让它永远不来
+        setTimeout(resolveFirstFrame, 3000);
         return { CK: CK, shim: shim };
       });
     });
@@ -410,19 +471,79 @@ function withTimeout(p, ms, msg) {
  *
  * [onStage](--perf-hud,默认不传):每个分包 require.async 完成时报一次
  * `'subpackage:' + name`,供冷启动阶段日志按分包名逐条打印。
+ * [trace](--perf-hud,默认不传):perf-hud.js createPkgTrace,发出/完成各报一次。
  */
-function loadSubpackages(loaders, onStage) {
+function loadSubpackages(loaders, onStage, trace) {
   return Promise.all(Object.keys(loaders).map(function (name) {
     if (typeof loaders[name] !== 'function') {
       return Promise.reject(new Error('加载表损坏:分包 ' + name + ' 的加载器不是函数'));
     }
-    return Promise.resolve().then(loaders[name]).then(function (r) {
+    return Promise.resolve().then(function () {
+      if (trace) trace.issued(name);
+      return loaders[name]();
+    }).then(function (r) {
+      if (trace) trace.ready(name);
       if (onStage) onStage('subpackage:' + name);
       return r;
     }).catch(function (e) {
       throw new Error('分包 ' + name + ' 加载失败: ' + ((e && (e.message || e.errMsg)) || e));
     });
   }));
+}
+
+/** '/pkg-cjk/mp-cjk.ttf.br' → 'pkg-cjk'(分包时间线用)。 */
+function pkgOfFile(file) {
+  return String(file || '').replace(/^\/+/, '').split('/')[0] || 'unknown';
+}
+
+/** preloadCjkFont 的 onIssue/onReady 钩子(--perf-hud 分包时间线);没有 trace 时为空。 */
+function traceHooks(trace, name) {
+  if (!trace) return {};
+  return {
+    onIssue: function () { trace.issued(name); },
+    onReady: function () { trace.ready(name); },
+  };
+}
+
+/** 空闲判定:最近这么久没有帧提交才算空闲(滚动/动画中每帧都 flush)。 */
+const IDLE_QUIET_MS = 300;
+/** 空闲轮询间隔。 */
+const IDLE_POLL_MS = 100;
+/** 等空闲最多等这么久;一直在滚也照做,不能永远不补注册。 */
+const IDLE_MAX_WAIT_MS = 10000;
+
+/**
+ * 空闲时调用 [fn]:没有手指按着([pointerState].down === 0),且最近
+ * [IDLE_QUIET_MS] 没有 Surface.flush(= 没在画帧)。等待期间临时包一层
+ * flush 记时间戳,做完只在自己仍是最外层时还原(外层可能又包了 --verify /
+ * --perf-hud 的包装),否则留着一个只多一次赋值的空壳。
+ * 最多等 [IDLE_MAX_WAIT_MS]。[getCK] 取不到 CanvasKit(理论上不会)时直接做。
+ */
+function whenIdle(getCK, pointerState, fn, o) {
+  const opt = o || {};
+  const now = opt.now || Date.now;
+  const setT = opt.setTimeout || setTimeout;
+  const CK = getCK();
+  const proto = CK && CK.Surface && CK.Surface.prototype;
+  if (!proto || typeof proto.flush !== 'function') { fn(); return; }
+  const start = now();
+  let lastFlush = start;
+  let active = true;
+  const orig = proto.flush;
+  const wrap = function () {
+    if (active) lastFlush = now();
+    return orig.apply(this, arguments);
+  };
+  proto.flush = wrap;
+  const tick = function () {
+    const t = now();
+    const idle = !(pointerState && pointerState.down > 0) && t - lastFlush >= IDLE_QUIET_MS;
+    if (!idle && t - start < IDLE_MAX_WAIT_MS) { setT(tick, IDLE_POLL_MS); return; }
+    active = false;
+    if (proto.flush === wrap) proto.flush = orig;
+    fn();
+  };
+  setT(tick, IDLE_POLL_MS);
 }
 
 /**
@@ -465,4 +586,4 @@ function decodeParts(parts) {
   return out;
 }
 
-module.exports = { boot, loadSubpackages, matchAsset, decodeParts };
+module.exports = { boot, loadSubpackages, matchAsset, decodeParts, whenIdle };

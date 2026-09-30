@@ -108,6 +108,37 @@ A 项最长帧从 1061ms 降到 97ms、>100ms 帧清零:着色器预热提前编
 (常用汉字合一字体去重、字体解析合并窗口、着色器预热等)叠加后的整体效果,
 不只是本节两项改动单独贡献。
 
+## 2.2 冷启动优化(开关与真机 A/B)
+
+iPhone 15 预览模式首次下载的时间线(`--perf-hud` 的 `[mp-boot]`)显示,首帧前真正的关键路径是
+"dart/wasm 分包全部就位 → 编译 CanvasKit → 执行 Dart → 初始化引擎(等常用汉字字体)→ 首帧",
+而 7 个分包的 `require.async` 几乎同一时刻发出,粗体字体(约 1.2MB)从第一毫秒就在和它们抢带宽。
+据此落地了五项,每项都能单独开关(见根 README「冷启动开关」):
+
+| 开关 | 默认 | 预期收益(真机待测) |
+|---|---|---|
+| `cjk_font_bold_timing: after_first_frame` | 开 | 首帧前少下载约 1.2MB(首帧前字节的 17–24%),估计首次下载省 0.4–0.7s;首帧里粗体先合成加粗,空闲时补注册一次 |
+| `early_wasm` | 开 | CanvasKit 编译不再等 dart 分包,估计 80ms 起(安卓 wasm 编译更慢,可能 150–300ms);缓存启动同样受益 |
+| `preload: auto`(= dart 优先) | 开 | 0–300ms,取决于原生下载是否限并发 |
+| `boot_assets: auto`(并进主包) | 开 | 少一个首帧前分包请求,取决于每个分包的固定开销(预览模式可能几百 ms) |
+| `initial_rendering_cache` + `lazy_code_loading` | 开 | 第二次起冷启动,启动界面提前 100–300ms 上屏;不改首帧时间 |
+
+**模拟器前后对比**(example,`--perf-hud`,各 5 次中位数,距 `App.onLaunch`):首帧 +574ms → +561ms,
+dart-chunks +412 → +405、canvaskit +370 → +376,差异在噪声内;`pkg-assets-boot` 那一行消失,粗体
+请求从 +100ms 挪到首帧之后(+633–644ms)。开发者工具里分包是本地文件、不走网络,"少抢带宽"类的
+收益在这里体现不出来,只能验证顺序与正确性——**收益要以真机数据为准**。
+
+**真机 A/B 怎么做**:同一份代码出两版,只差一个开关(例如 `--cjk-font-bold-timing=eager`、
+`--no-early-wasm`、`--preload=wasm`、`--boot-assets=package`),每版扫码 3 次取中位数,iOS/安卓各一台;
+预览版每次扫码都会重新下载(最坏情况),体验版再分别测首开与"最近使用"重开(缓存路径)。看:
+
+- `[mp-boot] first-frame` / `total`;
+- `[mp-boot] pkg <name> req=… dl=+a..+b inject=… ready=…`:`dl` 是 `wx.getPerformance` 给的真实下载窗,
+  各包 `dl` 是否重叠能直接看出原生下载是否并发、每包固定开销多大;dart 分包的 `inject` 是 JS 注入(解析)
+  耗时,缓存启动也存在;
+- `[mp-boot] ck-wait-dart`:为正说明 wasm 编译已完全藏在 dart 分包后面;
+- `[mp-boot] wx route(appLaunch)`、`firstRender`:onLaunch 之前与视图层的时间。
+
 ## 3. 真实电商小程序的基线(匿名)
 
 以下数据来自一个真实电商小程序线上版本(与上面的压测页是两回事,压测页是

@@ -17,7 +17,7 @@ import 'package:mp_flutter/src/emit_project.dart' show normalizeSplashColor;
 /// 手动与 pubspec.yaml 的 `version:` 保持一致——Dart 没有开销对等的运行时
 /// 方式读取自身包的 pubspec 只为取一个版本号(`resolvePackageRoot()` 倒是能
 /// 定位到包根,但读文件+解析 YAML 只为一个字符串不值得),这两处都极少改动。
-const kPackageVersion = '0.2.3';
+const kPackageVersion = '0.2.4';
 
 /// [runPipeline] 的签名,供 `runCli` 测试注入——单测不应该真的跑一遍
 /// `flutter build web`。
@@ -47,6 +47,12 @@ typedef PipelineRunner = Future<SizeReport> Function({
   String? fontBaseUrl,
   String? splashTitle,
   String? splashColor,
+  String preload,
+  String cjkFontBoldTiming,
+  bool earlyWasm,
+  String bootAssets,
+  bool initialRenderingCache,
+  bool lazyCodeLoading,
 });
 
 /// 探测本机 doctor 检查项的函数签名,供 `runCli` 测试注入。
@@ -145,6 +151,35 @@ ArgParser buildArgParser() {
         help: '远端回退字体:回退字体分片(简体中文 Noto)不打进包,运行时从该 https 地址拉取并'
             '缓存到本地文件。构建会在产物下输出待上传目录 mp-fonts-remote/,需原样上传到该地址;'
             '该域名必须加入小程序后台 request 合法域名。可被 mp_flutter.yaml 的 font_base_url 覆盖。')
+    // 冷启动开关(每项都能单独开关,方便真机 A/B;默认是冷启动方案推荐的组合)
+    ..addOption('preload',
+        allowed: kPreloadModes,
+        help: '冷启动:app.json preloadRule 挑哪些分包预下载(额度 2MB)。auto = 推荐(目前同 dart,默认);'
+            'dart = dart 分包优先(到了还要注入,先到能和 wasm 下载重叠);wasm = 0.2.3 的 wasm 优先顺序;'
+            'none = 不写 preloadRule。可被 mp_flutter.yaml 的 preload 覆盖。')
+    ..addOption('cjk-font-bold-timing',
+        allowed: kCjkBoldTimings,
+        help: '冷启动:粗体合一字体什么时候请求。after_first_frame = 首帧提交后才请求,首帧前不抢带宽,'
+            '到了空闲时补注册(一次 fontsChange,默认);eager = 0.2.3 的行为,启动就请求。'
+            '可被 mp_flutter.yaml 的 cjk_font_bold_timing 覆盖。')
+    ..addFlag('early-wasm',
+        help: '冷启动:pkg-wasm 一到就编译并实例化 CanvasKit,不等 dart 分包(默认开)。'
+            '--no-early-wasm 退回全部首帧前分包就位才编译。可被 mp_flutter.yaml 的 early_wasm 覆盖。',
+        defaultsTo: true)
+    ..addOption('boot-assets',
+        allowed: kBootAssetsModes,
+        help: '冷启动:启动资源(FontManifest/AssetManifest/清单字体/Roboto)放哪。auto = 放得下就进主包'
+            '(并入后主包 ≤1200KB),否则并进最小的 dart 分包,都放不下才单独成包(默认);main 同 auto;'
+            'dart = 只尝试 dart 分包;package = 0.2.3 的单独 pkg-assets-boot 分包。'
+            '可被 mp_flutter.yaml 的 boot_assets 覆盖。')
+    ..addFlag('initial-rendering-cache',
+        help: '冷启动:承载页开启静态初始渲染缓存(initialRenderingCache: static),第二次起冷启动'
+            '原生启动界面直接上屏,不等主包 JS 注入(默认开)。可被 mp_flutter.yaml 的 initial_rendering_cache 覆盖。',
+        defaultsTo: true)
+    ..addFlag('lazy-code-loading',
+        help: '冷启动:app.json 写 lazyCodeLoading: requiredComponents(按需注入,默认开)。'
+            '可被 mp_flutter.yaml 的 lazy_code_loading 覆盖。',
+        defaultsTo: true)
     ..addMultiOption('dart-define',
         splitCommas: false,
         help: '传给 flutter build web 的 --dart-define=KEY=VALUE(可重复;VALUE 可包含逗号)。'
@@ -331,6 +366,12 @@ Future<int> runCli(
     err.writeln('❌ ${e.message}');
     return 64;
   }
+  final preload = pickStr('preload', config.preload, 'auto');
+  final cjkFontBoldTiming = pickStr('cjk-font-bold-timing', config.cjkFontBoldTiming, 'after_first_frame');
+  final earlyWasm = pickBool('early-wasm', config.earlyWasm, true);
+  final bootAssets = pickStr('boot-assets', config.bootAssets, 'auto');
+  final initialRenderingCache = pickBool('initial-rendering-cache', config.initialRenderingCache, true);
+  final lazyCodeLoading = pickBool('lazy-code-loading', config.lazyCodeLoading, true);
   final fontBaseUrl = args.wasParsed('font-base-url')
       ? args['font-base-url'] as String
       : config.fontBaseUrl;
@@ -421,6 +462,12 @@ Future<int> runCli(
       fontBaseUrl: fontBaseUrl,
       splashTitle: config.splashTitle,
       splashColor: config.splashColor,
+      preload: preload,
+      cjkFontBoldTiming: cjkFontBoldTiming,
+      earlyWasm: earlyWasm,
+      bootAssets: bootAssets,
+      initialRenderingCache: initialRenderingCache,
+      lazyCodeLoading: lazyCodeLoading,
     );
     if (!report.ok) {
       err.writeln('\n❌ 包体积超限,产物不可用。');

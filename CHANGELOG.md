@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.2.4 — 2026-09-30
+
+冷启动优化五项,均可单独开关,外加分包下载/注入耗时的真机测量手段;这一版对真机首次
+下载启动的实测结果如实记录在下面,总时长暂未改善。
+
+- **测量(`--perf-hud`)**:每个分包一行 `[mp-boot] pkg <name> req=+x dl=+a..+b inject=c ready=+y size=…`
+  ——`req`/`ready` 是 boot 发出/等到 `require.async` 的时刻,`dl` 取 `wx.getPerformance()` 的
+  `loadPackage` 条目(真实下载时间窗),`inject` 取 `evaluateScript` 条目(该分包 JS 注入耗时),
+  均相对 `App.onLaunch`。API 不可用时对应字段静默省略。
+- **粗体合一字体首帧后才请求**(`cjk_font_bold_timing: after_first_frame`,默认;`eager` = 旧行为):
+  以前粗体(约 1.2MB)从第一毫秒就与 wasm/dart/常规字体抢带宽。现在首帧提交后才请求,首帧里的粗体
+  一律合成加粗;字节到了经已有的晚到补注册路径(`ui.loadFontFromList`,一次 fontsChange)补上,
+  补注册安排在空闲时(没有手指按着、最近 300ms 没有出帧,最多等 10s),避开滚动。
+- **wasm 一到就编译**(`early_wasm`,默认开):boot 把 `pkg-wasm` 单独拆出来,一到就
+  `WXWebAssembly.instantiate`,与 dart 分包的下载/注入并行;"CanvasKit 先于垫片、垫片先于
+  main.dart.js"的顺序不变。真机实测 CanvasKit 就绪比 Dart 完成早 0.85s。
+- **preloadRule 改成 dart 优先**(`preload: auto|dart|wasm|none`,CLI `--preload`,默认 `auto` = dart
+  优先):dart 分包到了还要在 JS 线程上注入,先到才能和 wasm 下载重叠;`wasm` 恢复旧顺序,`none`
+  不写 preloadRule。
+- **启动资源并进主包**(`boot_assets: auto|main|dart|package`,默认 `auto`):FontManifest/AssetManifest/
+  清单字体/Roboto 不再单独成 `pkg-assets-boot` 分包,并入主包(≤1200KB 时进 `mp-assets-boot/`),
+  否则并进最小的 dart 分包,都放不下才单独成包;少一个首帧前分包请求。
+- **初始渲染缓存 + 按需注入**(`initial_rendering_cache`、`lazy_code_loading`,默认开):承载页 json 写
+  `"initialRenderingCache": "static"`,第二次起冷启动时原生启动界面直接上屏(缓存只含 view/text,
+  canvas 不显示,被启动界面盖住);app.json 写 `"lazyCodeLoading": "requiredComponents"`(只有一个
+  真页面、没有自定义组件,收益很小,无害)。
+- **真机结果如实记录**:iPhone 15、预览版、首次下载启动(冷设备,无缓存):3.45s → 3.43s,
+  基本没变化——首帧前约 5.4MB、当前测试网络带宽 <2MB/s,是带宽瓶颈,不是本轮优化能解决的
+  瓶颈;粗体字体确认已经挪到首帧之后下载;CanvasKit 比 Dart 提前 0.85s 就绪。命中缓存后的
+  二次冷启动收益(`initial_rendering_cache` 等)尚未在真机上测量,留待下一轮。
+
 ## 0.2.3 — 2026-09-30
 
 新增着色器预热与表单/输入体验优化,减少长列表、大表单等场景的卡顿,并修复真机

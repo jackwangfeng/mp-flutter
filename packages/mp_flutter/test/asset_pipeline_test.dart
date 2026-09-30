@@ -238,4 +238,54 @@ void main() {
       expect(g[kAssetPackagePrefix], contains('assets/fonts/MaterialIcons-Regular.otf'));
     });
   });
+
+  group('placeBootAssets(冷启动 boot_assets)', () {
+    final assets = <String, List<int>>{
+      'assets/FontManifest.json': utf8.encode('[]'),
+      'assets/AssetManifest.bin': List.filled(3000, 1),
+      'assets/images/a.png': List.filled(100, 2),
+    };
+    final groups = planAssetGroups(assets);
+    final bootBytes = estimateGroupBytes(assets, groups.firstWhere((g) => g.boot).paths);
+
+    test('estimateGroupBytes 与实际装箱字节一致', () {
+      final b = buildAssetBundle(assets, groups: groups);
+      final actual = b.modules.where((m) => m.package == kBootAssetPackage).fold<int>(0, (n, m) => n + m.encodedBytes);
+      expect(bootBytes, actual);
+    });
+
+    test('auto:放得下就进主包,不再有 pkg-assets-boot 分包,模块在主包目录下', () {
+      final r = placeBootAssets(groups, assets, mode: 'auto', mainBytes: 500 * 1024,
+          dartPackageBytes: {'pkg-dart-0': 1700 * 1024});
+      expect(r.where, 'main');
+      final b = buildAssetBundle(assets, groups: r.groups);
+      expect(b.bootPackageRoots, isEmpty);
+      expect(b.packageRoots, isNot(contains(kBootAssetPackage)));
+      final m = b.modules.firstWhere((m) => m.originalPath == 'assets/FontManifest.json');
+      expect(m.package, 'main');
+      expect(m.modulePath, startsWith('$kMainBootAssetDir/'));
+    });
+
+    test('主包放不下:并进最小的 dart 分包;dart 也放不下:保持单独分包', () {
+      final r = placeBootAssets(groups, assets, mode: 'auto', mainBytes: kBootAssetsMainCeilingBytes,
+          dartPackageBytes: {'pkg-dart-0': 1700 * 1024, 'pkg-dart-1': 700 * 1024});
+      expect(r.where, 'pkg-dart-1');
+      final b = buildAssetBundle(assets, groups: r.groups);
+      final m = b.modules.firstWhere((m) => m.originalPath == 'assets/FontManifest.json');
+      expect(m.package, 'pkg-dart-1');
+      expect(m.modulePath, startsWith('pkg-dart-1/boot/'));
+      expect(b.packageRoots, isNot(contains('pkg-dart-1')), reason: 'dart 分包本来就在分包表里,不重复');
+      final none = placeBootAssets(groups, assets, mode: 'auto', mainBytes: kBootAssetsMainCeilingBytes,
+          dartPackageBytes: {'pkg-dart-0': kBootAssetsDartCeilingBytes});
+      expect(none.where, kBootAssetPackage);
+      expect(identical(none.groups, groups), isTrue);
+    });
+
+    test('dart 模式跳过主包;package 模式保持 0.2.3 行为', () {
+      expect(placeBootAssets(groups, assets, mode: 'dart', mainBytes: 0,
+          dartPackageBytes: {'pkg-dart-0': 100}).where, 'pkg-dart-0');
+      expect(placeBootAssets(groups, assets, mode: 'dart', mainBytes: 0).where, kBootAssetPackage);
+      expect(placeBootAssets(groups, assets, mode: 'package', mainBytes: 0).where, kBootAssetPackage);
+    });
+  });
 }

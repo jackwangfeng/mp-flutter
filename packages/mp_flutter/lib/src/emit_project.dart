@@ -63,6 +63,41 @@ List<String> selectPreloadPackages(
   return out;
 }
 
+/// app.json preloadRule 的候选顺序(`preload` 策略,见 config.dart kPreloadModes),
+/// 交给 [selectPreloadPackages] 按额度贪心挑。
+///
+/// preloadRule 在进入入口页时才触发,和 boot 的 require.async 几乎同时发出,
+/// 对入口页冷启动没有提前量,只决定谁先抢到带宽:
+///   · auto/dart:dart 分包 → 启动资源包 → wasm → 常规合一字体。dart 分包到了还要
+///     在 JS 线程上注入(解析约 2MB 源码),先到才能和 wasm 下载重叠;wasm 一到
+///     就编译(early_wasm),不必抢在最前;
+///   · wasm:0.2.3 的顺序 wasm → 启动资源包 → 常规字体 → dart → 粗体;
+///   · none:空,不写 preloadRule。
+/// 粗体(首帧后才用)只在 wasm(旧行为)里出现。
+List<String> preloadOrder(
+  String mode, {
+  required List<String> dartPackages,
+  required List<String> bootAssetPackages,
+  required String wasmPackage,
+  String? cjkPackage,
+  String? cjkBoldPackage,
+}) {
+  switch (mode) {
+    case 'none':
+      return const [];
+    case 'wasm':
+      return [
+        wasmPackage, ...bootAssetPackages, if (cjkPackage != null) cjkPackage, ...dartPackages,
+        if (cjkBoldPackage != null) cjkBoldPackage,
+      ];
+    case 'auto':
+    case 'dart':
+      return [...dartPackages, ...bootAssetPackages, wasmPackage, if (cjkPackage != null) cjkPackage];
+    default:
+      throw ArgumentError.value(mode, 'mode', '只能是 auto / dart / wasm / none');
+  }
+}
+
 /// `splash_color` 缺省值。
 const kDefaultSplashColor = '#ffffff';
 
@@ -130,6 +165,19 @@ String _splashWxss(String bg) {
 /// 已经是合法值)。[requireLocation] 是历史开关,保留向后兼容:单独传
 /// `requireLocation: true` 时效果等价于 `privateInfos: ['getLocation']`,与
 /// [privateInfos] 合并去重。
+/// [initialRenderingCache](冷启动,`initial_rendering_cache`):承载页 json 写
+/// `"initialRenderingCache": "static"`。第二次及以后冷启动时,视图层直接用上次
+/// 缓存的"初始 data 渲染出的 WXML"先上屏,不等逻辑层(主包 JS 注入、onLoad)。
+/// 兼容性(官方文档「初始渲染缓存」):只缓存 view/text/button/image/scroll-view/
+/// rich-text,其余组件在缓存里不显示——我们初始 data 下可见的只有原生启动界面
+/// (`mpSplash.visible: true`,view + text),canvas 在缓存里不显示正好被启动界面
+/// 盖住;输入框/原生组件/伴生层初始都是 wx:if 假或空列表。只缓存初始 data,不含
+/// setData 结果;仅 WebView 渲染(我们没开 Skyline);基础库 2.11.1+(libVersion 3.15.0)。
+///
+/// [lazyCodeLoading](`lazy_code_loading`):app.json 写
+/// `"lazyCodeLoading": "requiredComponents"`,只注入当前页面用到的代码。我们只有
+/// 一个真页面、没有自定义组件,运行时 JS 都经承载页 require/require.async 按需
+/// 执行;各分包的占位页 p/p 从不访问,本来就不该注入。收益很小,但无害。
 ProjectFiles emitProject({
   required String appId,
   required List<String> subPackageRoots,
@@ -141,6 +189,8 @@ ProjectFiles emitProject({
   String splashTitle = '',
   String splashColor = kDefaultSplashColor,
   List<String> ignoreDirs = const [],
+  bool initialRenderingCache = false,
+  bool lazyCodeLoading = false,
 }) {
   final enc = const JsonEncoder.withIndent('  ');
   final preload = preloadRoots ?? subPackageRoots;
@@ -174,6 +224,7 @@ ProjectFiles emitProject({
       if (splashTitle.isNotEmpty) 'navigationBarTitleText': splashTitle,
     },
     'sitemapLocation': 'sitemap.json',
+    if (lazyCodeLoading) 'lazyCodeLoading': 'requiredComponents',
     // 用户隐私相关接口需要显式声明用途才能调用(wx.getLocation/chooseLocation
     // 等);默认不声明(不需要这些能力的 App 不应背上对应的隐私弹窗)。
     if (resolvedPrivateInfos.isNotEmpty)
@@ -320,7 +371,10 @@ ${perfHud ? _perfHudOnLaunch : ''}  onError(msg) { console.error('[mp-flutter] u
     }),
     '$entryPagePath.wxml': wxml,
     '$entryPagePath.wxss': wxss,
-    '$entryPagePath.json': enc.convert({'usingComponents': <String, String>{}}),
+    '$entryPagePath.json': enc.convert({
+      'usingComponents': <String, String>{},
+      if (initialRenderingCache) 'initialRenderingCache': 'static',
+    }),
     for (final root in subPackageRoots) ...{
       '$root/$kPlaceholderPage.js': 'Page({});\n',
       '$root/$kPlaceholderPage.wxml': '<view/>\n',

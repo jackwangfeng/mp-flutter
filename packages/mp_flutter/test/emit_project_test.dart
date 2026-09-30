@@ -253,4 +253,39 @@ void main() {
     expect((cfg['packOptions'] as Map)['ignore'], [{'type': 'folder', 'value': 'mp-fonts-remote'}]);
     expect(jsonDecode(files.textFiles['project.config.json']!), isNot(contains('packOptions')));
   });
+
+  group('冷启动开关', () {
+    test('initialRenderingCache:承载页 json 写 static;lazyCodeLoading:app.json 写 requiredComponents', () {
+      final f = emitProject(appId: 'x', subPackageRoots: const ['pkg-wasm'], entryPagePath: 'pages/flutter/flutter',
+          initialRenderingCache: true, lazyCodeLoading: true);
+      expect(jsonDecode(f.textFiles['pages/flutter/flutter.json']!),
+          {'usingComponents': <String, dynamic>{}, 'initialRenderingCache': 'static'});
+      expect(jsonDecode(f.textFiles['app.json']!)['lazyCodeLoading'], 'requiredComponents');
+      final off = emitProject(appId: 'x', subPackageRoots: const ['pkg-wasm'], entryPagePath: 'pages/flutter/flutter');
+      expect(jsonDecode(off.textFiles['pages/flutter/flutter.json']!), {'usingComponents': <String, dynamic>{}});
+      expect(jsonDecode(off.textFiles['app.json']!), isNot(contains('lazyCodeLoading')));
+    });
+
+    test('初始渲染缓存兼容:初始 data 可见的只有启动界面(view/text),canvas 被它盖住', () {
+      final wxml = files.textFiles['pages/flutter/flutter.wxml']!;
+      expect(wxml, contains('<view wx:if="{{mpSplash.visible}}" class="mp-splash">'));
+      expect(wxml, contains('<input wx:if="{{mpInput.visible'));
+    });
+
+    test('preloadOrder:auto/dart 让 dart 先、不含粗体;wasm 是旧顺序;none 为空', () {
+      List<String> o(String m) => preloadOrder(m,
+          dartPackages: ['pkg-dart-0', 'pkg-dart-1'], bootAssetPackages: ['pkg-assets-boot'],
+          wasmPackage: 'pkg-wasm', cjkPackage: 'pkg-cjk', cjkBoldPackage: 'pkg-cjkb');
+      expect(o('auto'), ['pkg-dart-0', 'pkg-dart-1', 'pkg-assets-boot', 'pkg-wasm', 'pkg-cjk']);
+      expect(o('dart'), o('auto'));
+      expect(o('wasm'), ['pkg-wasm', 'pkg-assets-boot', 'pkg-cjk', 'pkg-dart-0', 'pkg-dart-1', 'pkg-cjkb']);
+      expect(o('none'), isEmpty);
+      expect(() => o('bogus'), throwsArgumentError);
+      // 额度 2MB 下 dart 优先:1740KB 的 dart-0 + 98KB 启动资源
+      expect(selectPreloadPackages(o('dart'), {
+        'pkg-dart-0': 1740 * 1024, 'pkg-dart-1': 745 * 1024, 'pkg-assets-boot': 98 * 1024,
+        'pkg-wasm': 1822 * 1024, 'pkg-cjk': 1146 * 1024,
+      }, quotaBytes: kPreloadQuotaBytes - 8 * 1024), ['pkg-dart-0', 'pkg-assets-boot']);
+    });
+  });
 }

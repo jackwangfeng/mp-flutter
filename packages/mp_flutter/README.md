@@ -71,6 +71,12 @@ dart run mp_flutter doctor
 | `-t, --target` | Flutter 入口文件,默认 `lib/main.dart`。相对路径锚定工程根(不是 cwd) |
 | `--dart-define=KEY=VALUE` | 透传给 `flutter build web`,可重复 |
 | `--dart-define-from-file=<path>` | 透传给 `flutter build web` |
+| `--preload=auto\|dart\|wasm\|none` | 冷启动:preloadRule 挑选顺序,默认 `auto`(= dart 优先) |
+| `--[no-]early-wasm` | 冷启动:wasm 一到就编译 CanvasKit,默认开 |
+| `--cjk-font-bold-timing=after_first_frame\|eager` | 冷启动:粗体合一字体首帧后才请求(默认)或启动即请求 |
+| `--boot-assets=auto\|main\|dart\|package` | 冷启动:启动资源并进主包/dart 分包,默认 `auto` |
+| `--[no-]initial-rendering-cache` | 冷启动:承载页静态初始渲染缓存,默认开 |
+| `--[no-]lazy-code-loading` | 冷启动:app.json 按需注入,默认开 |
 | `--version` | 打印包版本 |
 
 完整帮助:`dart run mp_flutter --help`。
@@ -95,6 +101,13 @@ cjk_font: full                  # full(默认)/ level1 / false,同 --cjk-font / 
 # font_base_url: https://cdn.example.com/mp-fonts/   # 远端回退字体(同 --font-base-url)
 splash_title: 我的小店          # 原生启动界面的应用名,缺省用 pubspec 的 name
 splash_color: "#ffffff"        # 启动界面背景色(#rgb / #rrggbb),缺省白色
+# 冷启动开关(默认即推荐组合,真机 A/B 时单独切换,见根 README「冷启动开关」)
+# preload: auto                 # auto(默认,=dart)/ dart / wasm / none,同 --preload
+# early_wasm: true              # wasm 一到就编译 CanvasKit,同 --no-early-wasm 关闭
+# cjk_font_bold_timing: after_first_frame   # 或 eager,同 --cjk-font-bold-timing
+# boot_assets: auto             # auto / main / dart / package,同 --boot-assets
+# initial_rendering_cache: true # 同 --no-initial-rendering-cache 关闭
+# lazy_code_loading: true       # 同 --no-lazy-code-loading 关闭
 target: lib/main.dart
 dart_define:
   API_BASE: https://api.example.com
