@@ -21,7 +21,7 @@ dev_dependencies:
 ```
 
 也可以用 git 依赖引入本仓库(公开仓库,无需额外凭证;`ref` 建议固定到一个
-发布 tag,例如 `v0.3.1`,而不是 `main`):
+发布 tag,例如 `v0.3.2`,而不是 `main`):
 
 ```yaml
 dev_dependencies:
@@ -29,7 +29,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.3.1
+      ref: v0.3.2
 ```
 
 是 `dev_dependency`——只在构建期用到,不会进最终的 Flutter Web 产物。

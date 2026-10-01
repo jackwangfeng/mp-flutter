@@ -23,7 +23,7 @@ dev_dependencies:
 ```
 
 A git dependency to this repository also works (public repo, no extra
-credentials needed; pin `ref` to a release tag such as `v0.3.1`, not `main`):
+credentials needed; pin `ref` to a release tag such as `v0.3.2`, not `main`):
 
 ```yaml
 dev_dependencies:
@@ -31,7 +31,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.3.1
+      ref: v0.3.2
 ```
 
 It's a `dev_dependency` — only used at build time, never bundled into the
