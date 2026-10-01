@@ -6,10 +6,10 @@ import 'toolchain.dart';
 import 'transform/split_main_dart_js.dart';
 import 'version_matrix.dart';
 
-/// `dart run mp_flutter doctor` 单项检查的结果。
+/// `dart run flutter_miniprogram doctor` 单项检查的结果。
 ///
 /// [ok] 为 false 且 [warnOnly] 为 false 时,doctor 命令整体退出码为 1(见
-/// bin/mp_flutter.dart)。[warnOnly] 为 true 的项(M4:微信开发者工具 CLI
+/// bin/flutter_miniprogram.dart)。[warnOnly] 为 true 的项(M4:微信开发者工具 CLI
 /// 缺失)即使 [ok] 为 false 也只提示、不计入退出码——它只影响命令行自动
 /// 上传/预览,不影响本地构建产物,不该让 `doctor` 在正常开发机上返回非零。
 class DoctorCheck {
@@ -57,7 +57,7 @@ List<String> wechatCliCandidates() {
 ///
 /// [flutterBin]/[esbuildOverride] 对应 CLI 的 `--flutter`/`--esbuild`(doctor
 /// 也遵循同样的显式覆盖)。[projectPath] 是工程根(找不到时为 null,见
-/// bin/mp_flutter.dart)——用于 D1 的 flutter SDK 探测(优先用
+/// bin/flutter_miniprogram.dart)——用于 D1 的 flutter SDK 探测(优先用
 /// `.dart_tool/package_config.json` 里 flutter 包所在 SDK)。
 Future<List<DoctorCheck>> runDoctorChecks({
   String? flutterBin,
@@ -146,7 +146,7 @@ Future<List<DoctorCheck>> runDoctorChecks({
         ok: false,
         warnOnly: true,
         detail: ' 未在默认路径找到(${candidates.join('; ')})。'
-            '不影响 mp_flutter 构建,仅影响命令行自动上传/预览。',
+            '不影响 flutter_miniprogram 构建,仅影响命令行自动上传/预览。',
       ));
     }
   }

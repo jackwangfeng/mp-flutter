@@ -1,6 +1,6 @@
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/transform/main_dart_js.dart';
-import 'package:mp_flutter/src/transform/canvaskit_js.dart' show TransformFailure;
+import 'package:flutter_miniprogram/src/transform/main_dart_js.dart';
+import 'package:flutter_miniprogram/src/transform/canvaskit_js.dart' show TransformFailure;
 
 const _fixture = '''
 (function dartProgram(){

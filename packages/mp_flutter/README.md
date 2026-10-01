@@ -1,7 +1,11 @@
-# mp_flutter
+# flutter_miniprogram
 
 把现有 Flutter 工程编译成微信小程序,主工程零 Dart 代码改动:加一个
 `dev_dependency`,跑一条命令,产出的小程序用微信开发者工具直接打开。
+
+包名是 `flutter_miniprogram`(pub.dev 上 `mp_flutter` 已被占用);项目/仓库
+仍叫 mp-flutter,本包在仓库里的目录也仍是 `packages/mp_flutter`,两者不是
+同一回事,别混了。
 
 完整项目文档(能力清单、支持矩阵、已知限制)见仓库根
 [README](https://github.com/jackwangfeng/mp-flutter#readme)。本页只讲这个包
@@ -9,16 +13,21 @@
 
 ## 安装
 
-仓库尚未发布到 pub.dev,以 git 依赖引入本仓库(公开仓库,无需额外凭证;`ref`
-建议固定到一个发布 tag,例如 `v0.2.1`,而不是 `main`):
+```yaml
+dev_dependencies:
+  flutter_miniprogram: ^0.3.0
+```
+
+也可以用 git 依赖引入本仓库(公开仓库,无需额外凭证;`ref` 建议固定到一个
+发布 tag,例如 `v0.3.0`,而不是 `main`):
 
 ```yaml
 dev_dependencies:
-  mp_flutter:
+  flutter_miniprogram:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.2.1
+      ref: v0.3.0
 ```
 
 是 `dev_dependency`——只在构建期用到,不会进最终的 Flutter Web 产物。
@@ -30,7 +39,7 @@ dev_dependencies:
 flutter pub get
 
 # 2. 编译成小程序(默认输出到 build/weapp)
-dart run mp_flutter
+dart run flutter_miniprogram
 
 # 3. 用微信开发者工具打开 build/weapp 即可运行
 ```
@@ -39,14 +48,14 @@ dart run mp_flutter
 工具 CLI)齐备:
 
 ```bash
-dart run mp_flutter doctor
+dart run flutter_miniprogram doctor
 ```
 
 ## CLI 参数
 
 ```
-dart run mp_flutter [选项]
-dart run mp_flutter doctor
+dart run flutter_miniprogram [选项]
+dart run flutter_miniprogram doctor
 ```
 
 | 选项 | 说明 |
@@ -81,7 +90,7 @@ dart run mp_flutter doctor
 | `--[no-]lazy-code-loading` | 冷启动:app.json 按需注入,默认开 |
 | `--version` | 打印包版本 |
 
-完整帮助:`dart run mp_flutter --help`。
+完整帮助:`dart run flutter_miniprogram --help`。
 
 ## `mp_flutter.yaml`(可选)
 
@@ -136,7 +145,7 @@ dart_define:
 开启:
 
 ```bash
-dart run mp_flutter --perf-hud
+dart run flutter_miniprogram --perf-hud
 ```
 
 或在 `mp_flutter.yaml` 里写 `perf_hud: true`。

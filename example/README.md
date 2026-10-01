@@ -1,4 +1,4 @@
-# mp_flutter 示例工程
+# flutter_miniprogram 示例工程
 
 一个普通的 Flutter Web 工程,底部导航 5 个 tab,覆盖 mp-flutter 支持的每一类
 能力,用来验证「主工程零改动」与各能力的真实用法。**不需要为了适配
@@ -26,16 +26,17 @@ tab 的 HTTP 请求走真实浏览器网络,请求外网可能因 CORS 失败,�
 ## 编译成微信小程序
 
 ```bash
-dart run mp_flutter
+dart run flutter_miniprogram
 ```
 
-（`mp_flutter` 以 dev_dependency + path 引入,见 `pubspec.yaml`;配置见
-`mp_flutter.yaml`。产物默认落在 `build/weapp`,用微信开发者工具直接打开。）
+(`flutter_miniprogram`——主包目录仍是 `packages/mp_flutter`——以 dev_dependency +
+path 引入,见 `pubspec.yaml`;配置见 `mp_flutter.yaml`。产物默认落在
+`build/weapp`,用微信开发者工具直接打开。)
 
 先跑一次自检,确认本机工具链(Node/esbuild/flutter/brotli)齐备:
 
 ```bash
-dart run mp_flutter doctor
+dart run flutter_miniprogram doctor
 ```
 
 ## 已知限制(在本示例里如何体现)

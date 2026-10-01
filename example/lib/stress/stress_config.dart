@@ -36,8 +36,8 @@ class StressConfig {
   static Duration betweenCasesDelay = const Duration(seconds: 1);
 
   /// 首页首帧之后、开始第一项之前的等待。真机默认 3s——模拟用户先看一眼首页
-  /// 再点进列表(运行时的着色器预热只在空闲时进行,见 mp_flutter
-  /// runtime/shader-warmup.js;不留这段空闲,A 项测到的就是"启动瞬间就进列表"
+  /// 再点进列表(运行时的着色器预热只在空闲时进行,见
+  /// packages/mp_flutter/runtime/shader-warmup.js;不留这段空闲,A 项测到的就是"启动瞬间就进列表"
   /// 的最坏情况)。冒烟测试里调成 0。
   static Duration startDelay = const Duration(seconds: 3);
 

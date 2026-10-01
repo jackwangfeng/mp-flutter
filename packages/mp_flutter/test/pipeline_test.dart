@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/pipeline.dart';
+import 'package:flutter_miniprogram/src/pipeline.dart';
 
 void main() {
   // resolveEsbuildPath 已在 Phase 6 拆分/替换为 esbuild_resolver.dart 的

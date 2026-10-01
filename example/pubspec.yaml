@@ -52,9 +52,10 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
-  # mp_flutter 只在构建期用到(`dart run mp_flutter`),不进 Flutter Web 产物,
-  # 所以是 dev_dependency——这也是 Task 1 约定的消费方式。
-  mp_flutter:
+  # flutter_miniprogram(目录仍是 packages/mp_flutter)只在构建期用到
+  # (`dart run flutter_miniprogram`),不进 Flutter Web 产物,所以是
+  # dev_dependency——这也是 Task 1 约定的消费方式。
+  flutter_miniprogram:
     path: ../packages/mp_flutter
 
 # For information on the generic Dart part of this file, see the

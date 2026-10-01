@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:mp_flutter/src/entrypoint.dart';
+import 'package:flutter_miniprogram/src/entrypoint.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -18,7 +18,7 @@ void main() {
     }
   }
 
-  test('写到 .dart_tool/mp_flutter/entrypoint.dart,按包名导入用户 main', () {
+  test('写到 .dart_tool/flutter_miniprogram/entrypoint.dart,按包名导入用户 main', () {
     project();
     final rel = writeEntrypoint(tmp.path);
     expect(rel, kEntrypointRelPath);
@@ -104,7 +104,7 @@ void main() {
         ..writeAsStringSync('void main() {}\n');
       final rel = writeEntrypoint(tmp.path, targetRelPath: 'tool/alt_main.dart');
       final src = File(p.join(tmp.path, rel)).readAsStringSync();
-      // 入口包装本身在 .dart_tool/mp_flutter/ 下,相对它到工程根下的
+      // 入口包装本身在 .dart_tool/flutter_miniprogram/ 下,相对它到工程根下的
       // tool/alt_main.dart 是 ../../tool/alt_main.dart。
       expect(src, contains("import '../../tool/alt_main.dart' as app;"));
       // 两种 import 形式都要能被真正解析:这里只断言字符串生成正确

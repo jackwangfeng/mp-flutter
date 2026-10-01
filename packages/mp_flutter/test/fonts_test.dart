@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/fonts.dart';
+import 'package:flutter_miniprogram/src/fonts.dart';
 
 // 合法 woff2 头 + 若干字节
 const woff2 = [0x77, 0x4F, 0x46, 0x32, 1, 2, 3];

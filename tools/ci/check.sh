@@ -7,8 +7,8 @@
 #   3. dart analyze + dart test(packages/mp_flutter,含 tag=slow 的消费者冒烟)
 #   4. flutter test(mp_flutter_native、mp_flutter_wechat、example)
 #      + flutter test --platform chrome(两个包各自的 @TestOn('browser') 用例)
-#   5. 构建冒烟:example 走 `dart run mp_flutter`,断言 app.json 存在
-#      (各分包 ≤2048KB 由 mp_flutter 自身的 SizeReport 在构建期校验,
+#   5. 构建冒烟:example 走 `dart run flutter_miniprogram`,断言 app.json 存在
+#      (各分包 ≤2048KB 由 flutter_miniprogram 自身的 SizeReport 在构建期校验,
 #      超限直接非零退出,这里不重复实现体积检查)
 #
 # 用法:直接 `tools/ci/check.sh` 跑全部;`FLUTTER_BIN=/path/to/flutter tools/ci/check.sh`
@@ -45,7 +45,7 @@ else
 fi
 FLUTTER_DIR="$(cd "$(dirname "$FLUTTER_BIN")" && pwd -P)"
 # 把选中的 flutter 所在目录塞到 PATH 最前面:保证脚本内所有 `flutter`/`dart`
-# 调用(包括 mp_flutter 内部 Process.run 出去的子进程)解析到同一套 SDK。
+# 调用(包括 flutter_miniprogram 内部 Process.run 出去的子进程)解析到同一套 SDK。
 export PATH="$FLUTTER_DIR:$PATH"
 export DART="$FLUTTER_DIR/dart" # packages/mp_flutter/js/test/split.test.js 用它编译 fixture
 
@@ -75,18 +75,18 @@ step "5/6 flutter test(mp_flutter_native / mp_flutter_wechat / example)"
 (cd packages/mp_flutter_wechat && flutter test --platform chrome test/channel_web_browser_test.dart)
 (cd example && flutter test)
 
-step "6/6 构建冒烟:dart run mp_flutter(example)"
+step "6/6 构建冒烟:dart run flutter_miniprogram(example)"
 rm -rf example/build/weapp
 # 显式 --flutter(M7):不依赖 D1 加入的 package_config.json 自动探测,也不
 # 依赖 PATH 顺序——本脚本已经确定了要用哪个 SDK($FLUTTER_BIN),直接告诉
-# mp_flutter,避免它探测到与 example/.dart_tool/package_config.json 不一致的
+# flutter_miniprogram,避免它探测到与 example/.dart_tool/package_config.json 不一致的
 # 另一套 SDK 而报 FlutterSdkMismatch(双 SDK 机器上很容易踩到)。
-(cd example && dart run mp_flutter --flutter "$FLUTTER_BIN")
+(cd example && dart run flutter_miniprogram --flutter "$FLUTTER_BIN")
 test -f example/build/weapp/app.json || {
   echo "❌ 构建冒烟失败:example/build/weapp/app.json 不存在" >&2
   exit 1
 }
-echo "✓ app.json 存在;各分包体积已由 mp_flutter 构建期 SizeReport 校验(超限会非零退出)"
+echo "✓ app.json 存在;各分包体积已由 flutter_miniprogram 构建期 SizeReport 校验(超限会非零退出)"
 
 echo
 echo "======================"

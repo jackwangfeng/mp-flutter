@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/esbuild_resolver.dart';
-import 'package:mp_flutter/src/toolchain.dart';
-import 'package:mp_flutter/src/transform/canvaskit_js.dart';
+import 'package:flutter_miniprogram/src/esbuild_resolver.dart';
+import 'package:flutter_miniprogram/src/toolchain.dart';
+import 'package:flutter_miniprogram/src/transform/canvaskit_js.dart';
 
 /// 真实 canvaskit.js 的最小骨架,保留三个补丁点的确切形状。
 const _fixture = '''

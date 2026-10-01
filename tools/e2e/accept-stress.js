@@ -52,7 +52,7 @@ const { runE2E } = require('./drive');
 const { startServer } = require('./test-server');
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
-const MP_FLUTTER_BIN = path.join(REPO_ROOT, 'packages/mp_flutter/bin/mp_flutter.dart');
+const MP_FLUTTER_BIN = path.join(REPO_ROOT, 'packages/mp_flutter/bin/flutter_miniprogram.dart');
 const EXAMPLE_DIR = path.join(REPO_ROOT, 'example');
 const IMG_PORT = 18081; // 与 accept-net.js 的 18080 分开,允许两者同时跑。
 

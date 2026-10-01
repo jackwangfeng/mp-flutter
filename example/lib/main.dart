@@ -10,7 +10,7 @@ import 'stress/stress_home.dart';
 
 /// mp-flutter 示例工程:底部导航 + 5 个功能页,覆盖 Phase 6 Task 4 要求的
 /// 每一类能力。所有页面在 `flutter run -d chrome`(普通浏览器,零改动)与
-/// `dart run mp_flutter` 编译出的微信小程序里都应该能跑——区别只在于
+/// `dart run flutter_miniprogram` 编译出的微信小程序里都应该能跑——区别只在于
 /// 「仅小程序可用」的能力(微信登录/支付/扫码等、原生 video/map)在普通
 /// 浏览器上会显示占位提示,而不是报错崩溃。
 ///
@@ -33,7 +33,7 @@ class MpFlutterExampleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'mp_flutter 示例',
+      title: 'flutter_miniprogram 示例',
       theme: ThemeData(colorSchemeSeed: const Color(0xFF3355FF), useMaterial3: true),
       home: const HomeShell(),
     );

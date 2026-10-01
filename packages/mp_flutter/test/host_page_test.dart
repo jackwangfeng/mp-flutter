@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/pipeline.dart';
+import 'package:flutter_miniprogram/src/pipeline.dart';
 
 /// 在 node 里用假 Page/wx/require 跑生成的承载页,返回 [scenario] 打印的 JSON。
 ///

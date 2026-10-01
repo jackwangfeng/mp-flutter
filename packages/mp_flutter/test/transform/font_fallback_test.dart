@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:mp_flutter/src/transform/canvaskit_js.dart' show TransformFailure;
-import 'package:mp_flutter/src/transform/font_fallback.dart';
+import 'package:flutter_miniprogram/src/transform/canvaskit_js.dart' show TransformFailure;
+import 'package:flutter_miniprogram/src/transform/font_fallback.dart';
 import 'package:test/test.dart';
 
 // 3.41.9 dart2js 压缩产物里的原样片段(真实业务构建产物)

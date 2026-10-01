@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/emit_project.dart';
+import 'package:flutter_miniprogram/src/emit_project.dart';
 
 void main() {
   late ProjectFiles files;

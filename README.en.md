@@ -20,21 +20,28 @@ mp-flutter compiles an existing Flutter project into a WeChat Mini Program. The 
 
 ## Quick Start (3 steps)
 
-**1. Add the dependency** — not yet published to pub.dev; add it as a git dependency. Pin `ref` to a release tag (e.g. `v0.2.5`) rather than `main`, so your build stays reproducible even if upstream moves on:
+**1. Add the dependency** — the pub.dev package is named `flutter_miniprogram` (the name `mp_flutter` was already taken on pub.dev by another package; the project/repo is still called mp-flutter, and the package's directory inside the repo is still `packages/mp_flutter` — three different things):
 
 ```yaml
 dev_dependencies:
-  mp_flutter:
+  flutter_miniprogram: ^0.3.0
+```
+
+For an unreleased commit or a private fork, use a git dependency instead:
+
+```yaml
+dev_dependencies:
+  flutter_miniprogram:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.2.5
+      ref: main
 ```
 
-**2. Compile** — from the project root (running `dart run mp_flutter doctor` first to self-check your toolchain is recommended):
+**2. Compile** — from the project root (running `dart run flutter_miniprogram doctor` first to self-check your toolchain is recommended):
 
 ```bash
-dart run mp_flutter
+dart run flutter_miniprogram
 ```
 
 Prerequisites (`doctor` checks all of these): Flutter (see Support Matrix below), Node **≥18**, and `brotli` (used to compress `canvaskit.wasm`; not preinstalled on macOS/Linux — `brew install brotli` / `apt install brotli`; missing it fails the build with exit code 6, see [`docs/troubleshooting.md`](docs/troubleshooting.md)). esbuild is installed automatically on first use. **macOS/Linux only** — Windows is not supported as a build host (see [`docs/support-matrix.md`](docs/support-matrix.md)); this only affects where you *build*, not where the mini program *runs*.
@@ -127,7 +134,7 @@ Three steps: add `mp_flutter` as a `dev_dependency`, run `dart run mp_flutter` f
 Different approaches, not a strictly-better-or-worse comparison. Taro and uni-app are cross-platform frameworks: you write UI against their own component/API model, and it's compiled down to a mini program without going through Flutter's rendering pipeline. MPFlutter is a separate open-source project that also compiles Flutter to mini programs, using a different rendering implementation. mp-flutter instead compiles an **unmodified** Flutter Web (CanvasKit) build, so the rendering pipeline is identical to real Flutter and no Dart code changes are needed — the trade-off is a larger package size than a mini-program-native implementation (see "How big is the output package?" below).
 
 **Does it work on real iOS/Android devices?**
-Yes — see "Real-device results" above. Note that the **build host** (where you run `dart run mp_flutter`) only supports macOS/Linux; Windows is not supported as a build host. That has no bearing on where the compiled mini program itself runs.
+Yes — see "Real-device results" above. Note that the **build host** (where you run `dart run flutter_miniprogram`) only supports macOS/Linux; Windows is not supported as a build host. That has no bearing on where the compiled mini program itself runs.
 
 **How big is the output package?**
 It depends on your project and chosen build options; typical total package sizes run from a few MB up to the low teens of MB (WeChat's limits: ≤2MB per subpackage/main package, ≤30MB total across all subpackages). By default a bundled common-Chinese-character font (~1–2.3MB) is included to avoid CJK first-paint reflow; `--no-licenses` and `--font-base-url` (serve fallback fonts from a CDN instead of bundling) can shrink this significantly. See [`docs/capability-guide.md`](docs/capability-guide.md) and [`docs/support-matrix.md`](docs/support-matrix.md) for exact measurements.

@@ -45,9 +45,9 @@ set -o pipefail
 # 双 SDK 机器上的坑(M7,与 tools/ci/check.sh 做法一致):`flutter`/`dart`
 # 官方启动脚本会把 FLUTTER_ROOT export 出来,子进程继承。如果调用本脚本的
 # 外层 shell 之前用别的 SDK(比如 flutter_ohos fork)跑过 flutter/dart 命令,
-# FLUTTER_ROOT 会残留指向那个 fork——下面每个 `dart run mp_flutter` 调用即便
+# FLUTTER_ROOT 会残留指向那个 fork——下面每个 `dart run flutter_miniprogram` 调用即便
 # 传了正确的 --flutter,子进程内部 pub 解析 package:flutter 源码时仍可能优先
-# 信这个环境变量。显式 unset 以绝后患(mp_flutter 自身调 flutter 子进程时也
+# 信这个环境变量。显式 unset 以绝后患(flutter_miniprogram 自身调 flutter 子进程时也
 # 会再 unset 一次,见 flutter_build.dart,这里是双保险)。
 unset FLUTTER_ROOT
 
@@ -55,7 +55,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 APPS_DIR="$SCRIPT_DIR/apps"
 OUT_DIR="$SCRIPT_DIR/out"
-MP_FLUTTER_BIN="$REPO_ROOT/packages/mp_flutter/bin/mp_flutter.dart"
+MP_FLUTTER_BIN="$REPO_ROOT/packages/mp_flutter/bin/flutter_miniprogram.dart"
 
 APPID="${MP_APPID:-touristappid}"
 SCRIPT_TIMEOUT="${E2E_SCRIPT_TIMEOUT:-360}"   # 秒;单次 node accept-*.js 调用的超时

@@ -71,14 +71,14 @@ tools/e2e/run.sh android accept-pv.js   # 只用 --force-platform android 跑 ac
 
 ```bash
 # accept.js:main.dart.js 分片(pkg-dart-0..N)路径
-dart run packages/mp_flutter/bin/mp_flutter.dart \
+dart run packages/mp_flutter/bin/flutter_miniprogram.dart \
   --project tools/e2e/apps/mpf_accept \
   --output tools/e2e/out/mpf_accept_split --verify --appid "${MP_APPID:-touristappid}" \
   --dart-chunk-kb 400
 node tools/e2e/accept.js tools/e2e/out/mpf_accept_split
 
 # accept-pv.js:可选 WXML 伴生层(语义树镜像)
-dart run packages/mp_flutter/bin/mp_flutter.dart \
+dart run packages/mp_flutter/bin/flutter_miniprogram.dart \
   --project tools/e2e/apps/mpf_pv \
   --output tools/e2e/out/mpf_pv_semantics --verify --appid "${MP_APPID:-touristappid}" \
   --semantics-mirror

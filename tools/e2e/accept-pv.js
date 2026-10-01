@@ -18,7 +18,7 @@
  * 裁剪)+ 一个 MpMap(120px 高,包 ClipRRect(12)),下面一段可滚动的空白(留给
  * 滚动验收),中部(未滚动时)留空让屏幕中心落在背景色上。
  *
- *   dart run packages/mp_flutter/bin/mp_flutter.dart \
+ *   dart run packages/mp_flutter/bin/flutter_miniprogram.dart \
  *     --project tools/e2e/apps/mpf_pv \
  *     --output <产物目录> --verify --appid <appid> [--semantics-mirror] \
  *     [--flutter <bin>] [--force-platform ios|android]

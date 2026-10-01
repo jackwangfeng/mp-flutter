@@ -7,7 +7,7 @@ import 'package:yaml/yaml.dart';
 ///
 /// 放在 `.dart_tool/` 下:它是工具生成目录,Flutter 工程模板默认就在
 /// `.gitignore` 里,不会弄脏用户仓库;`lib/` 下的 main.dart 保持原样。
-const kEntrypointRelPath = '.dart_tool/mp_flutter/entrypoint.dart';
+const kEntrypointRelPath = '.dart_tool/flutter_miniprogram/entrypoint.dart';
 
 /// 入口包装无法生成(工程形状不符合预期)。不是致命错误:退回直接构建
 /// `lib/main.dart`,只是安全区注入(K1)不生效——调用方打印 [reason]。
@@ -53,7 +53,7 @@ String writeEntrypoint(String projectPath, {String targetRelPath = 'lib/main.dar
 /// `lib/main.dart`),用 `package:` URI——可读、且不受入口包装自身所在目录
 /// 变化影响。不在 `lib/` 下时(`--target` 指向了 `lib/` 之外的文件,比如
 /// 工程根的脚本或另一个顶层目录),`package:` 机制覆盖不到,退回相对入口
-/// 包装自身所在目录(`.dart_tool/mp_flutter/`)的相对 import——两种形式都
+/// 包装自身所在目录(`.dart_tool/flutter_miniprogram/`)的相对 import——两种形式都
 /// 必须能被 dart2js 正确解析,见 `entrypoint_test.dart`。
 String entrypointImportFor(String projectPath, String packageName, String targetAbs) {
   final relFromRoot = p.normalize(p.relative(targetAbs, from: projectPath));
@@ -100,7 +100,7 @@ String entrypointImportFor(String projectPath, String packageName, String target
 /// 的相对 import,见 [entrypointImportFor]);缺省(仅供单测直接调用本函数时
 /// 使用)按旧行为拼 `package:$packageName/main.dart`。
 String buildEntrypointSource(String packageName, {String? targetImport}) => '''
-// 由 mp_flutter 生成,勿手改。见 mp_flutter/lib/src/entrypoint.dart。
+// 由 flutter_miniprogram 生成,勿手改。见 flutter_miniprogram/lib/src/entrypoint.dart。
 // ignore_for_file: type=lint
 import 'dart:js_interop';
 import 'dart:math' as math;

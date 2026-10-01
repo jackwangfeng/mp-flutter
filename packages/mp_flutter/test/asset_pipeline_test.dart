@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/asset_pipeline.dart';
+import 'package:flutter_miniprogram/src/asset_pipeline.dart';
 
 void main() {
   test('单个资源转成可 require 的 base64 模块', () {

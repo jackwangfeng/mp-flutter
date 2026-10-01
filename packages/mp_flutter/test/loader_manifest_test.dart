@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/asset_pipeline.dart';
-import 'package:mp_flutter/src/loader_manifest.dart';
+import 'package:flutter_miniprogram/src/asset_pipeline.dart';
+import 'package:flutter_miniprogram/src/loader_manifest.dart';
 
 void main() {
   final bundle = buildAssetBundle({

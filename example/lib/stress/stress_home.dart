@@ -10,7 +10,7 @@ class StressExampleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'mp_flutter 压力测试',
+      title: 'flutter_miniprogram 压力测试',
       theme: ThemeData(colorSchemeSeed: const Color(0xFF3355FF), useMaterial3: true),
       home: const StressHomePage(),
     );

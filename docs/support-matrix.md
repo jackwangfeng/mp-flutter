@@ -11,7 +11,7 @@
 
 ## 工具链版本
 
-**运行 `dart run mp_flutter`(构建 CLI 本身)只支持 macOS/Linux,Windows 未
+**运行 `dart run flutter_miniprogram`(构建 CLI 本身)只支持 macOS/Linux,Windows 未
 支持**——回归套件、CI(`ubuntu-latest`)与全部本地开发都在 macOS/Linux 上跑,
 `brotli`/`unset FLUTTER_ROOT` 等做法也是 POSIX shell 假设;Windows 上能否跑通
 未经验证,没有已知的兼容性工作。
@@ -20,16 +20,16 @@
 |---|---|---|
 | Flutter(stable) | **3.41.9** | 唯一已跑过完整回归套件的 stable 版本;换版本前须先跑一遍 `tools/e2e/run.sh stable`(见 `packages/mp_flutter/lib/src/version_matrix.dart`) |
 | Flutter(`flutter_ohos` fork) | **3.41.10-ohos-0.0.2-beta** | 已知与 stable 的产物差异:未打包 Material shaders(`ink_sparkle.frag`、`stretch_effect.frag`)——用到 `InkSparkle` 水波纹或 overscroll 拉伸效果的 App 运行时会取不到这两个资源 |
-| Node.js | **≥ 18** | `main.dart.js` 分片(`packages/mp_flutter/js/split.js`)与 esbuild 自动安装均依赖 Node;`dart run mp_flutter doctor` 会检查 |
+| Node.js | **≥ 18** | `main.dart.js` 分片(`packages/mp_flutter/js/split.js`)与 esbuild 自动安装均依赖 Node;`dart run flutter_miniprogram doctor` 会检查 |
 | `brotli` | — | 压缩 `canvaskit.wasm` 依赖它,macOS/Linux 都不预装;macOS `brew install brotli`,Debian/Ubuntu(含 CI)`apt install brotli`;缺失时构建以退出码 6 失败,`doctor` 会检查 |
 | 微信小程序基础库 | **≥ 3.15.0**(目标最低版本) | 回归套件历史实测覆盖 3.15.2–3.17.3;低于该版本的 `wx.*` 接口探测(见 `mp_flutter_wechat` 的 `call()` 兜底)会按“当前基础库不支持该接口”分型报错,而不是挂起 |
 | 微信开发者工具 CLI(可选) | — | 仅影响命令行自动上传/预览,不影响本地构建产物;`doctor` 会检测默认安装路径(缺失只警告,不计入 `doctor` 退出码) |
 
-其中 mp_flutter 之外的两个包(`mp_flutter_native`、`mp_flutter_wechat`)不绑定
+其中 flutter_miniprogram 之外的两个包(`mp_flutter_native`、`mp_flutter_wechat`)不绑定
 Flutter 版本矩阵,跟随宿主工程的 Flutter SDK 走。
 
 **双 SDK 机器**(同时装了多套 Flutter SDK,比如 stable + `flutter_ohos`
-fork):没有显式传 `--flutter`/`mp_flutter.yaml` 的 `flutter` 时,mp_flutter
+fork):没有显式传 `--flutter`/`mp_flutter.yaml` 的 `flutter` 时,flutter_miniprogram
 优先用工程 `.dart_tool/package_config.json` 里 `flutter` 包 `rootUri` 反推出的
 SDK(该工程 `flutter pub get` 时用的那一套);显式指定的 SDK 与这个推断结果
 不一致时会直接报错(退出码 64),而不是二选一悄悄跑出一个引擎/源码版本错配

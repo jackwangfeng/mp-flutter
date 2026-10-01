@@ -11,7 +11,7 @@ import 'canvaskit_js.dart' show TransformFailure;
 /// 分片在不同分包里,分包之间不能互相同步 require,但都能 require 主包。
 const kDartScopePath = 'mp-dart-scope.js';
 
-/// 定位 `js/split.js`(分片器,随 `mp_flutter` 包分发,依赖已用单文件形式
+/// 定位 `js/split.js`(分片器,随 `flutter_miniprogram` 包分发,依赖已用单文件形式
 /// vendor 进 `js/vendor/acorn.js`,不再需要 `npm install`)。
 ///
 /// [packageRoot] 仅供测试注入,覆盖用 [resolvePackageRoot] 解析出的包根——
@@ -26,7 +26,7 @@ Future<String> resolveDartSplitTool({String? packageRoot}) async {
     throw ToolchainMissing(
       'dart-split(js/split.js)',
       'main.dart.js 超过单分包 2048KB 时要在构建期分片,找不到分片器:$tool\n'
-      'mp_flutter 包可能安装不完整或版本过旧,请重新执行 `dart pub get`'
+      'flutter_miniprogram 包可能安装不完整或版本过旧,请重新执行 `dart pub get`'
       '(或 `flutter pub get`)。',
     );
   }

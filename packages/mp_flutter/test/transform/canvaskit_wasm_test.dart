@@ -4,9 +4,9 @@ import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/size_check.dart';
-import 'package:mp_flutter/src/transform/canvaskit_js.dart' show TransformFailure;
-import 'package:mp_flutter/src/transform/canvaskit_wasm.dart';
+import 'package:flutter_miniprogram/src/size_check.dart';
+import 'package:flutter_miniprogram/src/transform/canvaskit_js.dart' show TransformFailure;
+import 'package:flutter_miniprogram/src/transform/canvaskit_wasm.dart';
 
 List<int> _uleb(int v) {
   final out = <int>[];

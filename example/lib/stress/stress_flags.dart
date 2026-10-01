@@ -1,7 +1,7 @@
 /// 压力测试页的构建开关与图片来源配置。
 ///
 /// [kStressMode] 是编译期常量:只有显式传
-/// `--dart-define=MP_STRESS=true`(`dart run mp_flutter ... --dart-define=MP_STRESS=true`
+/// `--dart-define=MP_STRESS=true`(`dart run flutter_miniprogram ... --dart-define=MP_STRESS=true`
 /// 或 `flutter run/build web --dart-define=MP_STRESS=true`)才为 `true`。正式
 /// 构建不带这个 define 时,`main.dart` 里 `if (kStressMode) { ... }` 的 then
 /// 分支在 dart2js 看来是永远不可达的死代码——`stress/` 目录下所有类/函数都

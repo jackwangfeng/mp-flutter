@@ -15,13 +15,13 @@
 跑一遍自检,确认工具链就绪:
 
 ```bash
-cd example && dart run mp_flutter doctor
+cd example && dart run flutter_miniprogram doctor
 ```
 
 ## 仓库结构速览
 
 ```
-packages/mp_flutter/         构建管线(Dart CLI)与运行时 JS 垫片
+packages/mp_flutter/         构建管线(Dart CLI,pub.dev 包名 flutter_miniprogram)与运行时 JS 垫片
 packages/mp_flutter_native/  MpVideo/MpMap/MpCamera 原生组件桥
 packages/mp_flutter_wechat/  微信登录/支付等能力桥
 example/                     示例工程(dogfooding 用)

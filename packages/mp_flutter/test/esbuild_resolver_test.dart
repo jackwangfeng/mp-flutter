@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/esbuild_resolver.dart';
-import 'package:mp_flutter/src/toolchain.dart';
+import 'package:flutter_miniprogram/src/esbuild_resolver.dart';
+import 'package:flutter_miniprogram/src/toolchain.dart';
 
 ProcessResult _ok([String stdout = '']) => ProcessResult(0, 0, stdout, '');
 ProcessResult _fail([String stderr = 'boom']) => ProcessResult(0, 1, '', stderr);

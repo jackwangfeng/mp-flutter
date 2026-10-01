@@ -1,8 +1,8 @@
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/doctor.dart';
-import 'package:mp_flutter/src/esbuild_resolver.dart';
-import 'package:mp_flutter/src/flutter_build.dart';
-import 'package:mp_flutter/src/toolchain.dart';
+import 'package:flutter_miniprogram/src/doctor.dart';
+import 'package:flutter_miniprogram/src/esbuild_resolver.dart';
+import 'package:flutter_miniprogram/src/flutter_build.dart';
+import 'package:flutter_miniprogram/src/toolchain.dart';
 
 DoctorCheck _find(List<DoctorCheck> checks, String label) =>
     checks.firstWhere((c) => c.label == label);

@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/flutter_build.dart';
+import 'package:flutter_miniprogram/src/flutter_build.dart';
 
 void main() {
   group('flutterSdkFromPackageConfig(D1)—— 从 package_config.json 反推 flutter SDK', () {
@@ -145,7 +145,7 @@ void main() {
       expect(f.message, contains(raw), reason: 'Flutter 的原始错误必须原样透出');
     });
 
-    test('提示指向用户工程而非 mp_flutter', () {
+    test('提示指向用户工程而非 flutter_miniprogram', () {
       const f = FlutterBuildFailure(1, 'anything');
       expect(f.message, contains('flutter build web --release'),
           reason: '应给出用户可自行复现的命令');
@@ -174,9 +174,9 @@ void main() {
 
     test('target:-t <入口> 紧跟优化参数(K1 入口包装)', () {
       final args = buildFlutterBuildArgs(
-          profile: false, target: '.dart_tool/mp_flutter/entrypoint.dart', dartDefines: ['A=1']);
+          profile: false, target: '.dart_tool/flutter_miniprogram/entrypoint.dart', dartDefines: ['A=1']);
       expect(args, ['build', 'web', '--release', '-O4',
-        '-t', '.dart_tool/mp_flutter/entrypoint.dart', '--dart-define=A=1']);
+        '-t', '.dart_tool/flutter_miniprogram/entrypoint.dart', '--dart-define=A=1']);
     });
 
     test('profile:--profile -O1', () {

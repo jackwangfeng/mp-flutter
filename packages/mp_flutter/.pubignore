@@ -1,0 +1,6 @@
+# Not needed by consumers of the published package; keeps the download
+# smaller. `runtime/`, `js/` (minus the fixtures below) and `fonts/` still
+# ship — they're loaded by compiled Mini Programs at build/runtime.
+/test/
+/js/test/
+/dart_test.yaml

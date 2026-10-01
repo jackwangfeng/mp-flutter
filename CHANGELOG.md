@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0 — 2026-10-01
+
+### Breaking:主包改名为 `flutter_miniprogram`
+
+- **`packages/mp_flutter` 发布到 pub.dev 的包名由 `mp_flutter` 改为
+  `flutter_miniprogram`**(`mp_flutter` 这个名字在 pub.dev 上已被另一个包
+  占用)。仓库/项目名、仓库里的目录名(`packages/mp_flutter`)、配置文件名
+  (`mp_flutter.yaml`)都不受影响,仍是旧名字——只有 `pubspec.yaml` 的
+  `name`、`dev_dependencies` 里引入它用的 key、`package:` import 前缀、
+  以及 `dart run` 后面跟的可执行文件名变了:
+  - `dev_dependencies: { mp_flutter: ... }` → `dev_dependencies: { flutter_miniprogram: ... }`
+  - `dart run mp_flutter` → `dart run flutter_miniprogram`
+  - `import 'package:mp_flutter/...'` → `import 'package:flutter_miniprogram/...'`
+  - `mp_flutter_wechat`、`mp_flutter_native` 两个包名不变
+- 三个包(`flutter_miniprogram`、`mp_flutter_wechat`、`mp_flutter_native`)
+  同步升到 **0.3.0**,补齐 pub.dev 发布所需的 `homepage`/`repository`/
+  `issue_tracker`/`topics`/`LICENSE`/`CHANGELOG.md`,去掉 `publish_to: none`。
+
 ## 0.2.5 — 2026-10-01
 
 ### 输入跟手(安卓)

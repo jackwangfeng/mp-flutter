@@ -1,23 +1,23 @@
 import 'dart:io';
 import 'package:args/args.dart';
 import 'package:path/path.dart' as p;
-import 'package:mp_flutter/src/pipeline.dart';
-import 'package:mp_flutter/src/flutter_build.dart';
-import 'package:mp_flutter/src/fonts.dart';
-import 'package:mp_flutter/src/version_matrix.dart';
-import 'package:mp_flutter/src/transform/canvaskit_js.dart';
-import 'package:mp_flutter/src/cjk_font.dart' show resolveCjkBoldLevel;
-import 'package:mp_flutter/src/config.dart';
-import 'package:mp_flutter/src/doctor.dart';
-import 'package:mp_flutter/src/size_check.dart';
-import 'package:mp_flutter/src/emit_project.dart' show normalizeSplashColor;
+import 'package:flutter_miniprogram/src/pipeline.dart';
+import 'package:flutter_miniprogram/src/flutter_build.dart';
+import 'package:flutter_miniprogram/src/fonts.dart';
+import 'package:flutter_miniprogram/src/version_matrix.dart';
+import 'package:flutter_miniprogram/src/transform/canvaskit_js.dart';
+import 'package:flutter_miniprogram/src/cjk_font.dart' show resolveCjkBoldLevel;
+import 'package:flutter_miniprogram/src/config.dart';
+import 'package:flutter_miniprogram/src/doctor.dart';
+import 'package:flutter_miniprogram/src/size_check.dart';
+import 'package:flutter_miniprogram/src/emit_project.dart' show normalizeSplashColor;
 
-/// mp_flutter 包版本号。`--version` 与 `doctor` 都打这个。
+/// flutter_miniprogram 包版本号。`--version` 与 `doctor` 都打这个。
 ///
 /// 手动与 pubspec.yaml 的 `version:` 保持一致——Dart 没有开销对等的运行时
 /// 方式读取自身包的 pubspec 只为取一个版本号(`resolvePackageRoot()` 倒是能
 /// 定位到包根,但读文件+解析 YAML 只为一个字符串不值得),这两处都极少改动。
-const kPackageVersion = '0.2.5';
+const kPackageVersion = '0.3.0';
 
 /// [runPipeline] 的签名,供 `runCli` 测试注入——单测不应该真的跑一遍
 /// `flutter build web`。
@@ -206,7 +206,7 @@ ArgParser buildArgParser() {
     ..addOption('dart-chunk-kb', hide: true, help: '(测试用)强制 main.dart.js 分片预算,单位 KB')
     ..addOption('force-platform', hide: true, allowed: kForcePlatforms, help: '(测试用,仅与 --verify 同用)覆盖承载页传给引擎的设备平台')
     ..addFlag('help', abbr: 'h', negatable: false, help: '打印帮助信息')
-    ..addFlag('version', negatable: false, help: '打印 mp_flutter 版本号');
+    ..addFlag('version', negatable: false, help: '打印 flutter_miniprogram 版本号');
   parser.addCommand('doctor')
     ..addOption('flutter', help: 'flutter 可执行文件路径(默认自动探测;可被 mp_flutter.yaml 的 flutter 覆盖)')
     ..addOption('esbuild', help: 'esbuild 可执行文件路径(只探测,不触发自动安装;可被 mp_flutter.yaml 的 esbuild 覆盖)');
@@ -239,7 +239,7 @@ Future<int> runCli(
   }
 
   if (args['help'] as bool) {
-    out.writeln('mp_flutter — 把 Flutter 工程编译成微信小程序\n');
+    out.writeln('flutter_miniprogram — 把 Flutter 工程编译成微信小程序\n');
     out.writeln(parser.usage);
     out.writeln('\n子命令:\n  doctor   检查本机工具链(Node/esbuild/flutter/微信开发者工具 CLI)是否就绪');
     return 0;

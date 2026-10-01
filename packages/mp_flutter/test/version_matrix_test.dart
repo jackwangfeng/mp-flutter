@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/version_matrix.dart';
+import 'package:flutter_miniprogram/src/version_matrix.dart';
 
 const _stableOutput = '''
 Flutter 3.41.9 • channel stable • https://github.com/flutter/flutter.git

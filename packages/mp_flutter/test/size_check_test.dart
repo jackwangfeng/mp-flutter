@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/size_check.dart';
+import 'package:flutter_miniprogram/src/size_check.dart';
 
 const kb = 1024;
 

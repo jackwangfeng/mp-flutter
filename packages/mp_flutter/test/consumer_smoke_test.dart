@@ -11,7 +11,7 @@ import 'package:test/test.dart';
 ///   4.(部分覆盖)在工程子目录(lib/)里执行命令,用 `--project ..` 显式指定
 ///      工程根 —— 向上自动探测工程根是 Phase 6 Task 2 的范围,这里只验证
 ///      "显式指定时子目录执行不受影响"
-///   5. `dart run mp_flutter` 走编译好的 snapshot,`Platform.script` 指向消费者
+///   5. `dart run flutter_miniprogram` 走编译好的 snapshot,`Platform.script` 指向消费者
 ///      工程的 `.dart_tool`,pipeline.dart 已改用 `resolvePackageRoot()`
 ///      (`Isolate.resolvePackageUri`)定位 `runtime/`/`js/`,不再依赖
 ///      `Platform.script` 上溯——这里验证仍能找到并落盘运行时 JS
@@ -22,7 +22,7 @@ import 'package:test/test.dart';
 ///   dart test --run-skipped -t slow test/consumer_smoke_test.dart
 void main() {
   test(
-    '作为 dev_dependency(path)被路径含空格/中文的工程消费,在 lib/ 子目录跑 dart run mp_flutter',
+    '作为 dev_dependency(path)被路径含空格/中文的工程消费,在 lib/ 子目录跑 dart run flutter_miniprogram',
     () async {
       // `dart test` 的工作目录固定是包根(packages/mp_flutter)。
       final packageRoot = Directory.current.path;
@@ -56,13 +56,13 @@ void main() {
       expect(create.exitCode, 0,
           reason: 'flutter create 失败:\n${create.stdout}\n${create.stderr}');
 
-      // 把 mp_flutter 加成 dev_dependency(path,指向本包根)。
+      // 把 flutter_miniprogram 加成 dev_dependency(path,指向本包根)。
       final pubspecFile = File(p.join(projectDir.path, 'pubspec.yaml'));
       final original = pubspecFile.readAsStringSync();
       final patched = original.replaceFirst(
         RegExp(r'dev_dependencies:\s*\n'),
         'dev_dependencies:\n'
-        '  mp_flutter:\n'
+        '  flutter_miniprogram:\n'
         '    path: "${packageRoot.replaceAll('"', '\\"')}"\n',
       );
       expect(patched, isNot(equals(original)),
@@ -77,7 +77,7 @@ void main() {
       expect(pubGet.exitCode, 0,
           reason: 'flutter pub get 失败:\n${pubGet.stdout}\n${pubGet.stderr}');
 
-      // 核心断言:在 lib/ 子目录(不是工程根)里执行 dart run mp_flutter,
+      // 核心断言:在 lib/ 子目录(不是工程根)里执行 dart run flutter_miniprogram,
       // 显式 --project .. 指向工程根,--output 落到工程根下的 build/weapp。
       final libDir = p.join(projectDir.path, 'lib');
       final outputRel = p.join('..', 'build', 'weapp');
@@ -87,7 +87,7 @@ void main() {
         'dart',
         [
           'run',
-          'mp_flutter',
+          'flutter_miniprogram',
           '--project',
           '..',
           '--output',
@@ -98,7 +98,7 @@ void main() {
         workingDirectory: libDir,
       );
       expect(run.exitCode, 0,
-          reason: 'dart run mp_flutter 失败:\n${run.stdout}\n${run.stderr}');
+          reason: 'dart run flutter_miniprogram 失败:\n${run.stdout}\n${run.stderr}');
 
       // 产物断言:app.json(工程骨架)与运行时 JS(证明 resolvePackageRoot
       // 在 snapshot 运行下仍能找到随包分发的 runtime/)都落了盘。

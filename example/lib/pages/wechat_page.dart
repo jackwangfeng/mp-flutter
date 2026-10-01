@@ -107,7 +107,7 @@ class _WechatPageState extends State<WechatPage> {
               ),
               FilledButton(onPressed: () => _run('scanCode', () => MpWechat.scanCode()), child: const Text('扫码 scanCode')),
               FilledButton(
-                onPressed: () => _run('setClipboardData', () => MpWechat.setClipboardData('mp_flutter 示例')),
+                onPressed: () => _run('setClipboardData', () => MpWechat.setClipboardData('flutter_miniprogram 示例')),
                 child: const Text('写剪贴板'),
               ),
               FilledButton(
@@ -124,7 +124,7 @@ class _WechatPageState extends State<WechatPage> {
               ),
               FilledButton(
                 onPressed: () {
-                  MpWechat.setShareInfo(title: 'mp_flutter 示例', path: '/pages/flutter/flutter');
+                  MpWechat.setShareInfo(title: 'flutter_miniprogram 示例', path: '/pages/flutter/flutter');
                   _append('✓ setShareInfo: 已设置分享标题');
                 },
                 child: const Text('设置分享 setShareInfo'),

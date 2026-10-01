@@ -1,13 +1,13 @@
 # 故障排查(退出码对照表)
 
-`dart run mp_flutter`(旧用法 `dart run bin/mp_flutter.dart` 行为不变)按失败
+`dart run flutter_miniprogram`(旧用法 `dart run bin/flutter_miniprogram.dart` 行为不变)按失败
 类型分型退出码,方便脚本化调用判断"该做什么",不用去猜一堆 Dart 调用栈。
 命令行会把原因打到 stderr,本页按退出码汇总原因与处理办法。
 
 先跑一遍自检,能覆盖下面大多数环境类问题:
 
 ```bash
-dart run mp_flutter doctor
+dart run flutter_miniprogram doctor
 ```
 
 ## 退出码 0 —— 成功
@@ -23,7 +23,7 @@ dart run mp_flutter doctor
    exception + Dart 栈、退出码 255"的形式漏给调用方。stderr 会附带排查
    提示(Flutter/brotli/esbuild 是否可用);默认不打印完整调用栈,设置
    `MP_FLUTTER_DEBUG=1` 环境变量可取回完整栈供排障。
-2. **`dart run mp_flutter doctor`**:任意一项检查(Node/esbuild/flutter/
+2. **`dart run flutter_miniprogram doctor`**:任意一项检查(Node/esbuild/flutter/
    微信开发者工具 CLI)标 ✗ 时,`doctor` 本身以退出码 1 结束(单纯提示性的
    "esbuild 尚未安装,首次构建会自动装"不算 ✗)。
 
@@ -58,12 +58,12 @@ dart run mp_flutter doctor
 
 ## 退出码 4 —— `flutter build web` 失败
 
-mp_flutter 基于 Flutter 的 web target,这一步失败绝大多数时候是宿主工程本身
-的问题,不是 mp_flutter 的 bug。stderr 会原样附带 Flutter 自己的完整输出。
+flutter_miniprogram 基于 Flutter 的 web target,这一步失败绝大多数时候是宿主工程本身
+的问题,不是 flutter_miniprogram 的 bug。stderr 会原样附带 Flutter 自己的完整输出。
 
 **处理**:
 
-1. 先确认工程本身能跑通 `flutter build web --release`(不经过 mp_flutter)
+1. 先确认工程本身能跑通 `flutter build web --release`(不经过 flutter_miniprogram)
 2. 常见原因:直接用了 `dart:io`、platform channel,或者依赖了不支持 web 的
    插件
 3. 确认 `--flutter`/`mp_flutter.yaml` 的 `flutter` 指向的是预期的 SDK(尤其是
@@ -105,7 +105,7 @@ mp_flutter 基于 Flutter 的 web target,这一步失败绝大多数时候是宿
 - brotli 按上面的命令安装即可,没有绕开的旗标(压缩这一步不可跳过)
 - 离线时手动安装一份固定版本的 esbuild,用 `--esbuild <path>` 或
   `MP_FLUTTER_ESBUILD` 环境变量指向它,完全绕开自动安装
-- `dart run mp_flutter doctor` 可以在不触发自动安装的前提下,提前看到
+- `dart run flutter_miniprogram doctor` 可以在不触发自动安装的前提下,提前看到
   esbuild 是否已就绪
 
 ## 退出码 7 —— 回退字体下载失败
@@ -139,7 +139,7 @@ mp_flutter 基于 Flutter 的 web target,这一步失败绝大多数时候是宿
   `getFuzzyLocation`(微信不允许一个小程序同时声明这两个定位接口)
 - **显式指定的 Flutter SDK 与工程 `.dart_tool/package_config.json` 解析用的
   SDK 不一致**(D1,双 SDK 机器常见):没有显式传 `--flutter`/`mp_flutter.yaml`
-  的 `flutter` 时,mp_flutter 优先用 `package_config.json` 里 `flutter` 包
+  的 `flutter` 时,flutter_miniprogram 优先用 `package_config.json` 里 `flutter` 包
   `rootUri` 反推出的 SDK(该工程 `flutter pub get` 时用的那一套,dart2js 实际
   编译的就是它的 `packages/flutter` 源码);显式指定了 `--flutter` 且和这个
   推断结果不一致时,直接拒绝而不是二选一悄悄跑——继续跑大概率在 dart2js 阶段
@@ -213,7 +213,7 @@ mp_flutter 基于 Flutter 的 web target,这一步失败绝大多数时候是宿
 框架插入文字时会构造这样的正则,抛异常后这次更新丢掉。构建期已自动改写(构建日志里有一行
 `正则 Unicode 属性转义改写:N 处(…)`),出现这个报错通常是:
 
-1. 用的是旧版 mp_flutter 构建的产物——升级后重新构建;用 `grep -l 'p{' <产物>/pkg-dart-*/dart.js`
+1. 用的是旧版 flutter_miniprogram 构建的产物——升级后重新构建;用 `grep -l 'p{' <产物>/pkg-dart-*/dart.js`
    确认产物里已经没有属性转义;
 2. 业务代码在运行时拼接正则源码(构建期看不到),请改成固定字符串或改用显式码点区间;
 3. 构建失败报 `unknown-property`:构建机 Node 不认识这个属性名(Node 版本过旧或拼写错误),
@@ -231,7 +231,7 @@ mp_flutter 基于 Flutter 的 web target,这一步失败绝大多数时候是宿
 
 ---
 
-以上退出码对应源码见 `packages/mp_flutter/bin/mp_flutter.dart` 的 `runCli`;
+以上退出码对应源码见 `packages/mp_flutter/bin/flutter_miniprogram.dart` 的 `runCli`;
 更细的平台桥限制(不是构建期失败,而是运行时行为限制,例如
 `cacheWidth`/`toByteData` 不支持、原生组件层序限制等)见
 [`docs/support-matrix.md`](support-matrix.md)。

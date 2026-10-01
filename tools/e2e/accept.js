@@ -16,7 +16,7 @@
  * main.dart.js 切成多片(pkg-dart-0..N),用来覆盖"多片按序 require.async"
  * 的路径,例如(run.sh 默认不传 --dart-chunk-kb,这条要手动跑):
  *
- *   dart run packages/mp_flutter/bin/mp_flutter.dart \
+ *   dart run packages/mp_flutter/bin/flutter_miniprogram.dart \
  *     --project tools/e2e/apps/mpf_accept \
  *     --output tools/e2e/out/mpf_accept_split --verify --appid <appid> \
  *     --dart-chunk-kb 400

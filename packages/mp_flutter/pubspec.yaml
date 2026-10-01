@@ -1,7 +1,15 @@
-name: mp_flutter
+name: flutter_miniprogram
 description: Compile an existing Flutter project to a WeChat Mini Program without touching its source.
-version: 0.2.5
-publish_to: none
+version: 0.3.0
+homepage: https://github.com/jackwangfeng/mp-flutter
+repository: https://github.com/jackwangfeng/mp-flutter/tree/main/packages/mp_flutter
+issue_tracker: https://github.com/jackwangfeng/mp-flutter/issues
+topics:
+  - wechat
+  - miniprogram
+  - flutter-web
+  - canvaskit
+  - cross-platform
 
 environment:
   sdk: ^3.11.0
@@ -16,4 +24,4 @@ dev_dependencies:
   lints: ^4.0.0
 
 executables:
-  mp_flutter: mp_flutter
+  flutter_miniprogram: flutter_miniprogram

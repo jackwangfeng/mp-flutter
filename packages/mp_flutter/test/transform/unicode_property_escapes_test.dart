@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/toolchain.dart';
-import 'package:mp_flutter/src/transform/canvaskit_js.dart' show TransformFailure;
-import 'package:mp_flutter/src/transform/unicode_property_escapes.dart';
+import 'package:flutter_miniprogram/src/toolchain.dart';
+import 'package:flutter_miniprogram/src/transform/canvaskit_js.dart' show TransformFailure;
+import 'package:flutter_miniprogram/src/transform/unicode_property_escapes.dart';
 
 void main() {
   final packageRoot = Directory.current.path;

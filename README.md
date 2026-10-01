@@ -20,24 +20,33 @@
 
 ## 三步快速开始
 
-**1. 加依赖**——仓库尚未发布到 pub.dev,以 git 依赖引入本仓库(公开仓库,无需
-额外凭证;`ref` 建议固定到一个发布 tag,例如 `v0.2.5`,而不是 `main`,避免上游
-后续提交影响本地构建的可复现性):
+**1. 加依赖**——pub.dev 包名是 `flutter_miniprogram`(`mp_flutter` 这个名字
+已被 pub.dev 上的另一个包占用;仓库/项目仍叫 mp-flutter,包在仓库里的目录
+也仍是 `packages/mp_flutter`,三者不是一回事):
 
 ```yaml
 dev_dependencies:
-  mp_flutter:
+  flutter_miniprogram: ^0.3.0
+```
+
+也可以用 git 依赖引入本仓库(公开仓库,无需额外凭证;`ref` 建议固定到一个
+发布 tag,例如 `v0.3.0`,而不是 `main`,避免上游后续提交影响本地构建的可
+复现性):
+
+```yaml
+dev_dependencies:
+  flutter_miniprogram:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.2.5
+      ref: v0.3.0
 ```
 
-**2. 编译**——工程根跑一条命令(先跑 `dart run mp_flutter doctor` 自检工具链
-更省心):
+**2. 编译**——工程根跑一条命令(先跑 `dart run flutter_miniprogram doctor`
+自检工具链更省心):
 
 ```bash
-dart run mp_flutter
+dart run flutter_miniprogram
 ```
 
 前置条件(`doctor` 会逐项检查):Flutter(见下方支持矩阵)、Node **≥18**、
@@ -88,7 +97,7 @@ esbuild、`main.dart.js` 分片器(acorn)均已随 `packages/mp_flutter` 包分�
 (`tools/mp-context`、`packages/mp_flutter/js/test`)、`dart analyze` + `dart test`
 (`packages/mp_flutter`,含 tag `slow` 的消费者冒烟)、`flutter test`(含
 `--platform chrome` 浏览器用例,`mp_flutter_native`/`mp_flutter_wechat`/`example`)、
-`example` 构建冒烟(`dart run mp_flutter`,断言 `app.json` 落地——分包体积
+`example` 构建冒烟(`dart run flutter_miniprogram`,断言 `app.json` 落地——分包体积
 ≤2048KB 已由构建期 `SizeReport` 校验,超限直接非零退出)。本机跑
 `tools/ci/check.sh` 全绿是唯一的验证方式(见 `CONTRIBUTING.md`)。
 
@@ -131,7 +140,7 @@ Actions 的无头 ubuntu 环境跑不了,只能本地手动跑(见 `tools/e2e/RE
 
 承载页是全屏画布(`navigationStyle: custom`)。Flutter Web 引擎自己的
 `viewPadding` 恒为 0,mp-flutter 在构建时用一个生成的入口包装
-(`.dart_tool/mp_flutter/entrypoint.dart`,传给 `flutter build web -t`;`lib/main.dart`
+(`.dart_tool/flutter_miniprogram/entrypoint.dart`,传给 `flutter build web -t`;`lib/main.dart`
 不改)把小程序安全区注入 `MediaQuery.padding`/`viewPadding`:top = 状态栏
 (`safeArea.top`),bottom = 窗口高 − `safeArea.bottom`,横竖屏切换经
 `wx.onWindowResize` 更新。`SafeArea` 零改动生效。胶囊按钮不算进 padding,
@@ -215,7 +224,7 @@ private_infos: [chooseLocation, choosePoi]
 
 `MpWechat.setShareInfo` 设置的信息由承载页的 `onShareAppMessage`/`onShareTimeline` 读取(见 `packages/mp_flutter/lib/src/pipeline.dart`):未设置字段时,`onShareAppMessage` 用 `{path: '/<入口页>'}`、不带 `title`(微信用小程序名兜底);`onShareTimeline` 不支持 `path`(固定为当前页),只透传已设置的 `title`/`query`/`imageUrl`。每次 `setShareInfo` 都是整体替换,不按字段合并——只传 `title` 的下一次调用会连带清空之前设置的 `path`/`imageUrl`/`query`。
 
-`setShareInfo` 传的 `path` 应该指向入口页(`/pages/flutter/flutter…`):产物(`mp_flutter` 编译出来的小程序)只有这一个页面,分享到其它 `path` 微信会直接打不开。
+`setShareInfo` 传的 `path` 应该指向入口页(`/pages/flutter/flutter…`):产物(`flutter_miniprogram` 编译出来的小程序)只有这一个页面,分享到其它 `path` 微信会直接打不开。
 
 **已知限制**:分享出去的链接带的 `query` 目前传不到 Dart 侧——承载页 `onLoad(options)` 拿到的 `options.query`(小程序打开参数,如从分享卡片进入时带的 query)没有转发给 `self.__mpWechat`/引擎,业务代码目前读不到"是通过哪个分享链接进来的"。列为后续项,需要在 `onLoad` 里把 `options` 转发到 Dart 侧(例如经 wechat 桥新增一个只读入口)。
 
@@ -229,7 +238,7 @@ private_infos: [chooseLocation, choosePoi]
 #### 验收
 
 ```bash
-dart run mp_flutter --project <验收工程> --output <产物目录> --verify --appid <appid>
+dart run flutter_miniprogram --project <验收工程> --output <产物目录> --verify --appid <appid>
 cd tools/e2e && node accept-wx.js <产物目录>
 ```
 
@@ -259,7 +268,7 @@ cd tools/e2e && node accept-wx.js <产物目录>
 可选(默认关)的语义树镜像:把 Flutter 的 semantics 树同步成一批视觉隐藏(`opacity:0`、`pointer-events:none`)、按矩形定位的 WXML `<text>` 节点,服务微信「页面内容索引」与无障碍——纯 canvas 渲染的内容既不可被微信索引,也没有无障碍语义,伴生层一次性缓解两者(设计动机见 spec §4.1)。
 
 ```bash
-dart run mp_flutter --project <工程> --output <产物目录> --semantics-mirror
+dart run flutter_miniprogram --project <工程> --output <产物目录> --semantics-mirror
 ```
 
 - **默认关的取舍(裁定)**:语义树本身有运行时开销——引擎一旦激活就要持续维护整棵 `flt-semantics` 影子树,伴生层再叠加一层 500ms 轮询 + `setData`;不是每个 App 都需要页面内容索引或无障碍能力,不能替所有 App 默认打开,只有业务明确需要时才显式加 `--semantics-mirror`(或 `mp_flutter.yaml` 的 `semantics_mirror: true`)
@@ -514,7 +523,7 @@ App,覆盖列表滚动、图片、网络、微信能力等典型场景)完整验
 思路不同,不是谁更好的问题:Taro、uni-app 是跨端框架,需要按它们约定的组件/API 重新编写界面,编译到小程序时不经过 Flutter 渲染管线;MPFlutter 是另一个把 Flutter 编译到小程序的开源项目,采用了不同的渲染实现路径。mp-flutter 的做法是直接编译**未修改**的 Flutter Web(CanvasKit)产物,因此渲染管线与原生 Flutter 完全一致、不需要改 Dart 代码,代价是产物体积比纯小程序原生写法更大(见下方「包体积多大」)。
 
 **支持 iOS/Android 真机吗?**
-支持,已在 iPhone 15(iOS)与安卓真机上跑通一个真实电商小程序的完整验收(列表滚动、图片、网络、微信能力等典型场景),实测数据见上方「真机验证」与 [`docs/capability-guide.md`](docs/capability-guide.md)。注意:运行 `dart run mp_flutter` 的**开发机**只支持 macOS/Linux,Windows 未支持,这不影响编译产物在真机上的运行。
+支持,已在 iPhone 15(iOS)与安卓真机上跑通一个真实电商小程序的完整验收(列表滚动、图片、网络、微信能力等典型场景),实测数据见上方「真机验证」与 [`docs/capability-guide.md`](docs/capability-guide.md)。注意:运行 `dart run flutter_miniprogram` 的**开发机**只支持 macOS/Linux,Windows 未支持,这不影响编译产物在真机上的运行。
 
 **包体积多大?**
 取决于工程本身与所选配置,典型总包在几 MB 到十余 MB 量级(微信限制:单个分包/主包 ≤2MB,全部分包合计 ≤30MB)。默认配置下随包带常用汉字合一字体(约 1–2.3MB,减少中文首屏抖动);可用 `--no-licenses`、`--font-base-url`(回退字体改走远端 CDN)等选项显著缩小包体积。具体口径与实测数字见 [`docs/capability-guide.md`](docs/capability-guide.md)、[`docs/support-matrix.md`](docs/support-matrix.md)。

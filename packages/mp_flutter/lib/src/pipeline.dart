@@ -264,7 +264,7 @@ Future<SizeReport> runPipeline({
   // 6a. 运行时 JS 原样拷入(bom-shim / canvaskit-loader / boot)。放在资源装箱之前:
   //     启动资源能不能并进主包要看主包已有多大(见下面 placeBootAssets)。
   //
-  // 用 resolvePackageRoot 而不是 Platform.script 上溯:`dart run mp_flutter`
+  // 用 resolvePackageRoot 而不是 Platform.script 上溯:`dart run flutter_miniprogram`
   // 在消费者工程里跑的是编译好的 snapshot,Platform.script 指向消费者
   // `.dart_tool` 下的临时产物,不在本包源码树下,固定上溯层数会跳到无关目录。
   final runtimeDir =

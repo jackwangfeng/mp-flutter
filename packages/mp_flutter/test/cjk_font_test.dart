@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:mp_flutter/src/cjk_font.dart';
-import 'package:mp_flutter/src/package_root.dart';
+import 'package:flutter_miniprogram/src/cjk_font.dart';
+import 'package:flutter_miniprogram/src/package_root.dart';
 import 'package:test/test.dart';
 
 void main() {

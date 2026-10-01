@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:mp_flutter/src/config.dart';
+import 'package:flutter_miniprogram/src/config.dart';
 
 void main() {
   group('findProjectRoot —— 向上查找工程根', () {

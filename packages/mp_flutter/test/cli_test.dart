@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
-import '../bin/mp_flutter.dart';
-import 'package:mp_flutter/src/doctor.dart';
-import 'package:mp_flutter/src/size_check.dart';
+import '../bin/flutter_miniprogram.dart';
+import 'package:flutter_miniprogram/src/doctor.dart';
+import 'package:flutter_miniprogram/src/size_check.dart';
 
 void main() {
   group('runCli —— 参数/退出码(不碰真实文件系统外的东西,不联网)', () {
@@ -13,7 +13,7 @@ void main() {
       final out = StringBuffer();
       final code = await runCli(['--help'], stdoutSink: out);
       expect(code, 0);
-      expect(out.toString(), contains('mp_flutter'));
+      expect(out.toString(), contains('flutter_miniprogram'));
     });
 
     test('--version:退出码 0,打印包版本号', () async {
@@ -469,7 +469,7 @@ void main() {
       // "../lib/main.dart"(相对 --project 的 ".."),又被 entrypoint.dart
       // 的 writeEntrypoint 按"相对工程根"再拼一次,拼出 "../../lib/main.dart"
       // 这种指向仓库外层目录的错误路径,导致 consumer_smoke_test.dart 在子
-      // 目录里跑 `dart run mp_flutter --project ..` 直接构建失败
+      // 目录里跑 `dart run flutter_miniprogram --project ..` 直接构建失败
       // (Target file "../lib/main.dart" not found)。现在 target 原样透出,
       // 双重拼接的可能性从根上消除。
       String? seenProjectPath, seenTarget;

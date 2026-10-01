@@ -1,7 +1,14 @@
 name: mp_flutter_wechat
-description: 在 mp-flutter 编译的微信小程序中调用微信登录、支付等能力;其它平台上调用会明确报错。
-version: 0.2.5
-publish_to: none
+description: WeChat Mini Program APIs (login, payment, and more) for Flutter apps compiled with flutter_miniprogram; throws clear errors on other platforms.
+version: 0.3.0
+homepage: https://github.com/jackwangfeng/mp-flutter
+repository: https://github.com/jackwangfeng/mp-flutter/tree/main/packages/mp_flutter_wechat
+issue_tracker: https://github.com/jackwangfeng/mp-flutter/issues
+topics:
+  - wechat
+  - miniprogram
+  - flutter-web
+  - cross-platform
 
 environment:
   sdk: ^3.11.0

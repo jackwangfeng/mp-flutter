@@ -31,7 +31,7 @@ A–G 各项定义:
 
 ```bash
 cd example
-dart run ../packages/mp_flutter/bin/mp_flutter.dart \
+dart run ../packages/mp_flutter/bin/flutter_miniprogram.dart \
   --output build/weapp_stress \
   --appid <你的 appid> \
   --perf-hud \
