@@ -1,6 +1,22 @@
 # mp-flutter
 
+[![License](https://img.shields.io/github/license/jackwangfeng/mp-flutter)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/jackwangfeng/mp-flutter)](https://github.com/jackwangfeng/mp-flutter/releases)
+[![Flutter](https://img.shields.io/badge/Flutter-3.41.9%20stable-02569B?logo=flutter&logoColor=white)](docs/support-matrix.md)
+[![Platform](https://img.shields.io/badge/platform-WeChat%20Mini%20Program-07C160?logo=wechat&logoColor=white)](https://developers.weixin.qq.com/miniprogram/dev/framework/)
+
 把现有 Flutter 工程编译成微信小程序,主工程零代码改动。
+
+**不改一行 Dart 代码,把 Flutter 应用编译成微信小程序** · Run **unmodified** Flutter apps as **WeChat Mini Programs** — Flutter Web + CanvasKit, zero Dart code changes, real-device verified on iOS/Android.
+
+[English README →](README.en.md) ・ 中文(当前)
+
+## 为什么用它 / Why mp-flutter
+
+- **零代码改动**——主工程不用为小程序环境写任何适配代码,照常 `flutter pub get`,工程根跑一条命令就编译成小程序
+- **渲染一致性**——编译产物是未经改造的 Flutter Web(CanvasKit)产物,渲染管线与真正的 Flutter 一致,不是另起炉灶的小程序专用渲染器,不存在"组件支持子集"的问题
+- **完整的 widget / 插件生态**——`http`/`dio`/`shared_preferences`/`NetworkImage` 等用法不变,底层透明替换为小程序 API,见下方「能力与限制」
+- **真机验证过的性能**——iPhone 15 / 安卓真机实测:冷启动约 3.5–4s,长列表滚动 iOS 40–56fps / Android 50–60fps,图片墙约 57fps,完整压测数据见 [`docs/capability-guide.md`](docs/capability-guide.md)
 
 ## 三步快速开始
 
@@ -485,6 +501,23 @@ App,覆盖列表滚动、图片、网络、微信能力等典型场景)完整验
 - 原生组件(`MpVideo`/`MpMap`/`MpCamera`)恒在 Flutter 画布之上,不能被 Flutter 图层遮挡
 - 远端字体(`font_base_url`)与部分触摸手势细节(多点触控、长按选词)标注为「真机待验」,
   上线前建议按自己的交互流程实测
+
+## FAQ / 常见问题
+
+**Flutter 能开发微信小程序吗?**
+能。mp-flutter 把标准的 Flutter 工程(Flutter Web + CanvasKit 产物)编译成微信小程序,主工程不需要改一行 Dart 代码,渲染、触摸、文本输入、网络、存储等能力由构建期注入的垫片透明接管,详见上方「能力与限制」。
+
+**Flutter 怎么转微信小程序?**
+三步:① 给 Flutter 工程加 `mp_flutter` 这个 `dev_dependency`;② 工程根跑 `dart run mp_flutter`;③ 用微信开发者工具直接打开产物目录(默认 `build/weapp`)即可运行。需要登录/支付/扫码等微信能力,或视频/地图/相机等原生组件时,额外引入 `mp_flutter_wechat`/`mp_flutter_native` 两个独立 Dart 包。完整步骤见上方「三步快速开始」。
+
+**和 MPFlutter / Taro / uni-app 有什么区别?**
+思路不同,不是谁更好的问题:Taro、uni-app 是跨端框架,需要按它们约定的组件/API 重新编写界面,编译到小程序时不经过 Flutter 渲染管线;MPFlutter 是另一个把 Flutter 编译到小程序的开源项目,采用了不同的渲染实现路径。mp-flutter 的做法是直接编译**未修改**的 Flutter Web(CanvasKit)产物,因此渲染管线与原生 Flutter 完全一致、不需要改 Dart 代码,代价是产物体积比纯小程序原生写法更大(见下方「包体积多大」)。
+
+**支持 iOS/Android 真机吗?**
+支持,已在 iPhone 15(iOS)与安卓真机上跑通一个真实电商小程序的完整验收(列表滚动、图片、网络、微信能力等典型场景),实测数据见上方「真机验证」与 [`docs/capability-guide.md`](docs/capability-guide.md)。注意:运行 `dart run mp_flutter` 的**开发机**只支持 macOS/Linux,Windows 未支持,这不影响编译产物在真机上的运行。
+
+**包体积多大?**
+取决于工程本身与所选配置,典型总包在几 MB 到十余 MB 量级(微信限制:单个分包/主包 ≤2MB,全部分包合计 ≤30MB)。默认配置下随包带常用汉字合一字体(约 1–2.3MB,减少中文首屏抖动);可用 `--no-licenses`、`--font-base-url`(回退字体改走远端 CDN)等选项显著缩小包体积。具体口径与实测数字见 [`docs/capability-guide.md`](docs/capability-guide.md)、[`docs/support-matrix.md`](docs/support-matrix.md)。
 
 ## 链接
 
