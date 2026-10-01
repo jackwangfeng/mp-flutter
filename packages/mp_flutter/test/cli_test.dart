@@ -37,6 +37,86 @@ void main() {
       expect(code, 64);
       expect(err.toString(), contains('--force-platform'));
     });
+
+    test('--help:提到 e2e-driver 子命令', () async {
+      final out = StringBuffer();
+      final code = await runCli(['--help'], stdoutSink: out);
+      expect(code, 0);
+      expect(out.toString(), contains('e2e-driver'));
+    });
+  });
+
+  group('runCli —— e2e-driver 子命令', () {
+    test('打印包根下 tool/e2e 的绝对路径,退出码 0', () async {
+      final out = StringBuffer();
+      final code = await runCli(
+        ['e2e-driver'],
+        stdoutSink: out,
+        packageRootResolver: () async => '/fake/package/root',
+      );
+      expect(code, 0);
+      expect(out.toString().trim(), p.join('/fake/package/root', 'tool', 'e2e'));
+    });
+
+    test('不依赖 --project,也不触发 doctor/pipeline', () async {
+      final out = StringBuffer();
+      var pipelineCalled = false;
+      final code = await runCli(
+        ['e2e-driver'],
+        stdoutSink: out,
+        packageRootResolver: () async => '/another/root',
+        pipelineRunner: ({
+          required String projectPath,
+          required String outputPath,
+          required String appId,
+          String? flutterBin,
+          String? esbuildPath,
+          bool profile = false,
+          bool verify = false,
+          int? dartChunkBudgetBytes,
+          String? forcePlatform,
+          bool requireLocation = false,
+          List<String> privateInfos = const [],
+          bool semanticsMirror = false,
+          bool perfHud = false,
+          bool licenses = true,
+          bool shaderWarmup = true,
+          bool shaderWarmupLight = false,
+          String? cjkFont = 'level1',
+          String? cjkFontBold,
+          String? fontBaseUrl,
+          String? splashTitle,
+          String? splashColor,
+          String preload = 'auto',
+          String cjkFontBoldTiming = 'after_first_frame',
+          bool earlyWasm = true,
+          String bootAssets = 'auto',
+          bool initialRenderingCache = true,
+          bool lazyCodeLoading = true,
+          String androidInput = 'offscreen',
+          bool inputTiming = false,
+          List<String> dartDefines = const [],
+          String? dartDefineFromFile,
+          bool safeArea = true,
+          String? target,
+        }) async {
+          pipelineCalled = true;
+          return SizeReport(const {}, const []);
+        },
+      );
+      expect(code, 0);
+      expect(pipelineCalled, isFalse);
+      expect(out.toString().trim(), p.join('/another/root', 'tool', 'e2e'));
+    });
+
+    test('真实 resolvePackageRoot:路径实际存在,且含 drive.js', () async {
+      final out = StringBuffer();
+      final code = await runCli(['e2e-driver'], stdoutSink: out);
+      expect(code, 0);
+      final dirPath = out.toString().trim();
+      expect(Directory(dirPath).existsSync(), isTrue, reason: dirPath);
+      expect(File(p.join(dirPath, 'drive.js')).existsSync(), isTrue, reason: dirPath);
+    });
   });
 
   group('runCli —— 工程根探测', () {

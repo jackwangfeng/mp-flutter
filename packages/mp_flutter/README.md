@@ -56,6 +56,7 @@ dart run flutter_miniprogram doctor
 ```
 dart run flutter_miniprogram [选项]
 dart run flutter_miniprogram doctor
+dart run flutter_miniprogram e2e-driver
 ```
 
 | 选项 | 说明 |
@@ -91,6 +92,26 @@ dart run flutter_miniprogram doctor
 | `--version` | 打印包版本 |
 
 完整帮助:`dart run flutter_miniprogram --help`。
+
+### `e2e-driver` 子命令
+
+打印随包分发的 E2E 驱动脚本目录(`tool/e2e/drive.js` 所在目录)的绝对路径,
+退出码 0。该目录含驱动微信开发者工具跑验收用的 `drive.js`(冷启动处理 +
+几个开发者工具 CLI 版本兼容绕过)、`package.json`(声明 `miniprogram-automator`
+依赖)与一份独立 README。推荐用法——**先复制再装依赖**,不要直接在 pub 缓存
+目录里 `npm install`:
+
+```bash
+DIR=$(dart run flutter_miniprogram e2e-driver)
+cp -R "$DIR" ./mp-e2e && (cd mp-e2e && npm i)
+```
+
+```js
+require('./mp-e2e/drive.js')
+```
+
+详细用法(`runE2E` 的参数/返回值、已知的冷启动与开发者工具偶发问题)见该
+目录下的 `README.md`。
 
 ## `mp_flutter.yaml`(可选)
 

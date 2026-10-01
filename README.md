@@ -104,6 +104,26 @@ esbuild、`main.dart.js` 分片器(acorn)均已随 `packages/mp_flutter` 包分�
 **E2E(`tools/e2e/`)不进 CI**:需要微信开发者工具的 GUI 与登录态,GitHub
 Actions 的无头 ubuntu 环境跑不了,只能本地手动跑(见 `tools/e2e/README.md`)。
 
+### E2E 驱动脚本(随包分发)
+
+驱动微信开发者工具跑验收(`drive.js`,含冷启动处理与几个开发者工具 CLI
+版本兼容绕过)也随 `flutter_miniprogram` 包一起发布到 pub.dev
+(`tool/e2e/drive.js`),方便只把本包当依赖引入、不 clone 本仓库的用户复用:
+
+```bash
+DIR=$(dart run flutter_miniprogram e2e-driver)   # 打印随包分发的 tool/e2e 绝对路径
+cp -R "$DIR" ./mp-e2e && (cd mp-e2e && npm i)      # 复制一份再装依赖,不要在 pub 缓存里装
+```
+
+```js
+const { runE2E } = require('./mp-e2e/drive.js');
+```
+
+详细用法(`runE2E` 的 `projectPath`/`interact`/`settleMs` 等参数、返回值
+`lines`/`states` 等字段、已知的冷启动/开发者工具偶发问题)见
+[`packages/mp_flutter/tool/e2e/README.md`](packages/mp_flutter/tool/e2e/README.md)。
+仓库内 `tools/e2e/drive.js` 现在只是转发到这份包内版本,`accept-*.js` 用法不变。
+
 ### 网络与存储
 
 用法零改动:`package:http`、`dio`、框架 `NetworkImage`、`shared_preferences` 照常写,底层被垫片透明替换为小程序 API,不需要主工程感知。使用前请注意以下限制:

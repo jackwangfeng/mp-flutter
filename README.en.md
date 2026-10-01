@@ -105,6 +105,28 @@ Other known limitations (full, current list always in [`docs/support-matrix.md`]
 
 See [`docs/capability-guide.md`](docs/capability-guide.md) for where complex pages (long lists, image grids, long-form text, large forms, heavy visual effects, native components) start to hit real-device limits, and concrete, actionable guidance (e.g. lazy-loaded list rows are effectively unbounded; keep a single eagerly-built block of text under ~1500 characters / 50 paragraphs; split forms with more than 10–15 fields across steps).
 
+## E2E driver (shipped in the package)
+
+The WeChat DevTools automation driver used to run this project's own
+acceptance suite (`drive.js` — cold-start handling plus a couple of DevTools
+CLI version workarounds) ships inside the `flutter_miniprogram` pub package
+at `tool/e2e/drive.js`, so you can reuse it against your own compiled output
+without cloning this repository:
+
+```bash
+DIR=$(dart run flutter_miniprogram e2e-driver)   # prints the absolute path to the shipped tool/e2e dir
+cp -R "$DIR" ./mp-e2e && (cd mp-e2e && npm i)      # copy it out first, then install — don't npm install inside pub's cache
+```
+
+```js
+const { runE2E } = require('./mp-e2e/drive.js');
+```
+
+See [`packages/mp_flutter/tool/e2e/README.md`](packages/mp_flutter/tool/e2e/README.md)
+for the full `runE2E` usage (its `projectPath`/`interact`/`settleMs` options,
+the shape of the returned `lines`/`states`/etc.) and the known cold-start /
+DevTools-flake notes.
+
 ## Real-device results
 
 Beyond the WeChat DevTools simulator regression suite, mp-flutter has been run through a full acceptance pass on real hardware (list scrolling, images, networking, WeChat capabilities, etc.) on:

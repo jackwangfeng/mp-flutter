@@ -106,6 +106,24 @@ void main() {
       expect(File(p.join(outputAbs, 'boot.js')).existsSync(), isTrue);
       expect(File(p.join(outputAbs, 'bom-shim.js')).existsSync(), isTrue);
       expect(File(p.join(outputAbs, 'canvaskit.js')).existsSync(), isTrue);
+
+      // e2e-driver 子命令:同样走 resolvePackageRoot()/snapshot 运行这条路径,
+      // 验证随包分发的 tool/e2e/(drive.js 等)在消费者侧也能被定位到、且
+      // 目录/文件确实落在 pub 包根下(不是本仓库源码树的 tools/e2e/)。
+      final e2eDriver = await Process.run(
+        'dart',
+        ['run', 'flutter_miniprogram', 'e2e-driver'],
+        workingDirectory: libDir,
+      );
+      expect(e2eDriver.exitCode, 0,
+          reason: 'dart run flutter_miniprogram e2e-driver 失败:\n'
+              '${e2eDriver.stdout}\n${e2eDriver.stderr}');
+      final e2eDriverDir = (e2eDriver.stdout as String).trim();
+      expect(Directory(e2eDriverDir).existsSync(), isTrue, reason: e2eDriverDir);
+      expect(File(p.join(e2eDriverDir, 'drive.js')).existsSync(), isTrue, reason: e2eDriverDir);
+      expect(File(p.join(e2eDriverDir, 'package.json')).existsSync(), isTrue, reason: e2eDriverDir);
+      expect(p.equals(e2eDriverDir, p.join(packageRoot, 'tool', 'e2e')), isTrue,
+          reason: 'e2e-driver 应该指向本包根下的 tool/e2e,而不是别处:$e2eDriverDir');
     },
     timeout: const Timeout(Duration(minutes: 15)),
   );

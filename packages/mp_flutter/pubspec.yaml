@@ -1,6 +1,6 @@
 name: flutter_miniprogram
 description: Compile an existing Flutter project to a WeChat Mini Program without touching its source.
-version: 0.3.0
+version: 0.3.1
 homepage: https://github.com/jackwangfeng/mp-flutter
 repository: https://github.com/jackwangfeng/mp-flutter/tree/main/packages/mp_flutter
 issue_tracker: https://github.com/jackwangfeng/mp-flutter/issues

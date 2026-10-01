@@ -3,6 +3,15 @@
 See the repository's [root CHANGELOG](https://github.com/jackwangfeng/mp-flutter/blob/main/CHANGELOG.md)
 for the full, detailed history (in Chinese) across all three packages.
 
+## 0.3.1 — 2026-10-01
+
+- The WeChat DevTools E2E driver script (`drive.js`) is now shipped inside
+  this package at `tool/e2e/drive.js`, with its own `package.json`
+  (declaring the `miniprogram-automator` dependency) and `README.md`. New CLI
+  subcommand `dart run flutter_miniprogram e2e-driver` prints the absolute
+  path to that directory. See the root CHANGELOG and
+  `packages/mp_flutter/tool/e2e/README.md` for usage.
+
 ## 0.3.0 — 2026-10-01
 
 - **Breaking**: the package published to pub.dev is renamed from `mp_flutter`

@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.3.1 — 2026-10-01
+
+### E2E 驱动脚本随包发布
+
+- **`drive.js`(驱动微信开发者工具跑 E2E 验收的脚本,含冷启动处理与几个
+  开发者工具 CLI 版本兼容绕过)移入 `packages/mp_flutter/tool/e2e/drive.js`,
+  随 `flutter_miniprogram` 包一起发布到 pub.dev**(`tool/` 未被 `.pubignore`
+  排除,照常随包分发)。同目录新增 `package.json`(声明
+  `miniprogram-automator` 依赖,与仓库原 `tools/e2e/package.json` 同版本)与
+  一份独立 `README.md`(如何定位该目录、如何装依赖、`runE2E` 最小用法、
+  冷启动/已知偶发问题说明)。
+- 仓库内 `tools/e2e/drive.js` 改为薄转发(`module.exports = require('../../packages/mp_flutter/tool/e2e/drive.js')`),
+  `tools/e2e/accept-*.js` 的 `require('./drive')` 用法不变。
+- `drive.js` 对 `miniprogram-automator` 的解析改为懒加载(调用 `runE2E` 时
+  才 require),解析顺序:正常 require 解析 → 实际被 `node` 执行的入口脚本
+  所在目录(`require.main.filename`,覆盖本仓库 `tools/e2e/node_modules` 这种
+  "入口脚本与依赖同目录、但转发到别处的 drive.js" 布局)→ 调用方
+  `process.cwd()` → `NODE_PATH`。都找不到时报清晰的错误信息,提示
+  `npm i miniprogram-automator`。
+- **新增 CLI 子命令 `dart run flutter_miniprogram e2e-driver`**:打印随包
+  分发的 `tool/e2e` 目录绝对路径(复用 `runtime/` 已在用的包根解析器
+  `resolvePackageRoot()`),退出码 0。推荐配方:
+  ```bash
+  DIR=$(dart run flutter_miniprogram e2e-driver)
+  cp -R "$DIR" ./mp-e2e && (cd mp-e2e && npm i)
+  ```
+  然后 `require('./mp-e2e/drive.js')`。已加入 `--help`、根 README(中/英)与
+  `packages/mp_flutter/README.md`。
+
 ## 0.3.0 — 2026-10-01
 
 ### Breaking:主包改名为 `flutter_miniprogram`

@@ -11,13 +11,14 @@ import 'package:flutter_miniprogram/src/config.dart';
 import 'package:flutter_miniprogram/src/doctor.dart';
 import 'package:flutter_miniprogram/src/size_check.dart';
 import 'package:flutter_miniprogram/src/emit_project.dart' show normalizeSplashColor;
+import 'package:flutter_miniprogram/src/package_root.dart';
 
 /// flutter_miniprogram 包版本号。`--version` 与 `doctor` 都打这个。
 ///
 /// 手动与 pubspec.yaml 的 `version:` 保持一致——Dart 没有开销对等的运行时
 /// 方式读取自身包的 pubspec 只为取一个版本号(`resolvePackageRoot()` 倒是能
 /// 定位到包根,但读文件+解析 YAML 只为一个字符串不值得),这两处都极少改动。
-const kPackageVersion = '0.3.0';
+const kPackageVersion = '0.3.1';
 
 /// [runPipeline] 的签名,供 `runCli` 测试注入——单测不应该真的跑一遍
 /// `flutter build web`。
@@ -66,6 +67,10 @@ typedef DoctorRunner = Future<List<DoctorCheck>> Function({
   String? esbuildOverride,
   String? projectPath,
 });
+
+/// [resolvePackageRoot] 的签名,供 `runCli` 测试注入——`e2e-driver` 子命令用它
+/// 定位随包分发的 `tool/e2e/` 目录,单测不应该依赖真实的包解析。
+typedef PackageRootResolver = Future<String> Function();
 
 Future<void> main(List<String> argv) async {
   exit(await runCli(argv));
@@ -210,6 +215,7 @@ ArgParser buildArgParser() {
   parser.addCommand('doctor')
     ..addOption('flutter', help: 'flutter 可执行文件路径(默认自动探测;可被 mp_flutter.yaml 的 flutter 覆盖)')
     ..addOption('esbuild', help: 'esbuild 可执行文件路径(只探测,不触发自动安装;可被 mp_flutter.yaml 的 esbuild 覆盖)');
+  parser.addCommand('e2e-driver');
   return parser;
 }
 
@@ -225,6 +231,7 @@ Future<int> runCli(
   String Function()? currentDir,
   DoctorRunner doctorRunner = runDoctorChecks,
   PipelineRunner pipelineRunner = runPipeline,
+  PackageRootResolver packageRootResolver = resolvePackageRoot,
 }) async {
   final out = stdoutSink ?? stdout;
   final err = stderrSink ?? stderr;
@@ -241,11 +248,23 @@ Future<int> runCli(
   if (args['help'] as bool) {
     out.writeln('flutter_miniprogram — 把 Flutter 工程编译成微信小程序\n');
     out.writeln(parser.usage);
-    out.writeln('\n子命令:\n  doctor   检查本机工具链(Node/esbuild/flutter/微信开发者工具 CLI)是否就绪');
+    out.writeln('\n子命令:'
+        '\n  doctor      检查本机工具链(Node/esbuild/flutter/微信开发者工具 CLI)是否就绪'
+        '\n  e2e-driver  打印随包分发的 E2E 驱动脚本目录(tool/e2e/drive.js 所在目录)的绝对路径。'
+        '\n              配方:'
+        '\n                DIR=\$(dart run flutter_miniprogram e2e-driver)'
+        '\n                cp -R "\$DIR" ./mp-e2e && (cd mp-e2e && npm i)'
+        '\n              然后 require(\'./mp-e2e/drive.js\')。详见该目录下的 README.md。');
     return 0;
   }
   if (args['version'] as bool) {
     out.writeln(kPackageVersion);
+    return 0;
+  }
+
+  if (args.command?.name == 'e2e-driver') {
+    final root = await packageRootResolver();
+    out.writeln(p.join(root, 'tool', 'e2e'));
     return 0;
   }
 

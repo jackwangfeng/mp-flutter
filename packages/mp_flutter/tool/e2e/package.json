@@ -1,0 +1,11 @@
+{
+  "name": "flutter-miniprogram-e2e-driver",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WeChat DevTools CLI driver (drive.js) shipped alongside the flutter_miniprogram pub package, for consumers who want to drive E2E acceptance runs against their own compiled Mini Program.",
+  "type": "commonjs",
+  "main": "drive.js",
+  "dependencies": {
+    "miniprogram-automator": "^0.12.1"
+  }
+}
