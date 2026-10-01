@@ -22,8 +22,7 @@ class _StubBackend implements MpNativeBackend {
   }) {
     // isAvailable 恒 false,MpNativeView 的 build() 不会走到这里;真的走到
     // 说明调用方绕过了 isAvailable 检查,属于用法错误。
-    throw UnsupportedError(
-        'mp_flutter_native: 当前平台不支持原生组件,不应该调用 buildView');
+    throw UnsupportedError('mp_flutter_native: 当前平台不支持原生组件,不应该调用 buildView');
   }
 
   @override
@@ -31,7 +30,9 @@ class _StubBackend implements MpNativeBackend {
 
   @override
   void setEventHandler(
-      int viewId, void Function(String type, Object? detail)? handler) {}
+    int viewId,
+    void Function(String type, Object? detail)? handler,
+  ) {}
 
   @override
   void cancelRequest(Object requestToken) {}
@@ -39,5 +40,6 @@ class _StubBackend implements MpNativeBackend {
   @override
   Future<String> sendCommand(int viewId, String method, String argsJson) =>
       throw UnsupportedError(
-          'mp_flutter_native: $method 仅在 mp-flutter 编译的小程序中可用');
+        'mp_flutter_native: $method 仅在 mp-flutter 编译的小程序中可用',
+      );
 }

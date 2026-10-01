@@ -3,6 +3,20 @@
 See the repository's [root CHANGELOG](https://github.com/jackwangfeng/mp-flutter/blob/main/CHANGELOG.md)
 for the full, detailed history (in Chinese) across all three packages.
 
+## 0.3.2 — 2026-10-01
+
+- pub.dev score: `README.md` is now English-primary (install/usage/config/
+  limitations), with the existing Chinese content moved to `README.zh.md`.
+- Added `example/README.md` (this is a build-time CLI tool, not a library,
+  so the example is a pubspec snippet + command + `mp_flutter.yaml` sample
+  rather than a runnable Dart program).
+- Static analysis: added `analysis_options.yaml` (`package:lints/core.yaml`)
+  and fixed all analyzer findings, including an "Angle brackets will be
+  interpreted as HTML" dartdoc warning in
+  `lib/src/transform/canvaskit_js.dart` (the regex example in that doc
+  comment is now fenced as a code block).
+- Reformatted `lib/` and `bin/` with `dart format` (no behavior change).
+
 ## 0.3.1 — 2026-10-01
 
 - The WeChat DevTools E2E driver script (`drive.js`) is now shipped inside

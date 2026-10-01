@@ -1,6 +1,6 @@
 name: mp_flutter_native
 description: Wire MpVideo/MpMap/MpCamera to native <video>/<map>/<camera> in WeChat Mini Programs built by flutter_miniprogram; falls back elsewhere.
-version: 0.3.0
+version: 0.3.2
 homepage: https://github.com/jackwangfeng/mp-flutter
 repository: https://github.com/jackwangfeng/mp-flutter/tree/main/packages/mp_flutter_native
 issue_tracker: https://github.com/jackwangfeng/mp-flutter/issues

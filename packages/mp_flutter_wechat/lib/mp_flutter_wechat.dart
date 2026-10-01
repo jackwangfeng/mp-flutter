@@ -11,7 +11,8 @@ import 'dart:ui' show Rect;
 
 import 'src/channel.dart';
 import 'src/models.dart';
-import 'src/channel_stub.dart' if (dart.library.js_interop) 'src/channel_web.dart';
+import 'src/channel_stub.dart'
+    if (dart.library.js_interop) 'src/channel_web.dart';
 
 export 'src/channel.dart' show MpWechatChannel;
 export 'src/models.dart';
@@ -39,7 +40,8 @@ class MpWechat {
   ]) async {
     if (!_ch.isAvailable) {
       throw UnsupportedError(
-          'mp_flutter_wechat: $api 仅在 mp-flutter 编译的微信小程序中可用');
+        'mp_flutter_wechat: $api 仅在 mp-flutter 编译的微信小程序中可用',
+      );
     }
     final raw = await _ch.call(api, jsonEncode(params));
     return (jsonDecode(raw) as Map).cast<String, Object?>();
@@ -51,7 +53,10 @@ class MpWechat {
     final code = (await call('login'))['code'] as String?;
     if (code == null) {
       throw const MpWechatException(
-          api: 'login', errMsg: 'login 成功回调未返回 code', cancelled: false);
+        api: 'login',
+        errMsg: 'login 成功回调未返回 code',
+        cancelled: false,
+      );
     }
     return code;
   }
@@ -78,7 +83,9 @@ class MpWechat {
 
   /// `wx.scanCode`;拉起扫码。
   static Future<MpScanResult> scanCode({bool onlyFromCamera = false}) async =>
-      MpScanResult.fromJson(await call('scanCode', {'onlyFromCamera': onlyFromCamera}));
+      MpScanResult.fromJson(
+        await call('scanCode', {'onlyFromCamera': onlyFromCamera}),
+      );
 
   /// `wx.setClipboardData`。
   static Future<void> setClipboardData(String data) async {
@@ -126,16 +133,23 @@ class MpWechat {
   /// 设置承载页 `onShareAppMessage` 使用的分享信息;不可用时空操作。
   /// 只传已设置(非 null)的字段;每次调用整体替换,不按字段合并。
   /// [path] 传入且不以 `/` 开头(小程序页面路径要求)时抛 [ArgumentError]。
-  static void setShareInfo({String? title, String? path, String? imageUrl, String? query}) {
+  static void setShareInfo({
+    String? title,
+    String? path,
+    String? imageUrl,
+    String? query,
+  }) {
     if (path != null && !path.startsWith('/')) {
       throw ArgumentError.value(path, 'path', '分享路径必须以 / 开头(小程序页面路径)');
     }
     if (!_ch.isAvailable) return;
-    _ch.setShareInfo(jsonEncode({
-      if (title != null) 'title': title,
-      if (path != null) 'path': path,
-      if (imageUrl != null) 'imageUrl': imageUrl,
-      if (query != null) 'query': query,
-    }));
+    _ch.setShareInfo(
+      jsonEncode({
+        if (title != null) 'title': title,
+        if (path != null) 'path': path,
+        if (imageUrl != null) 'imageUrl': imageUrl,
+        if (query != null) 'query': query,
+      }),
+    );
   }
 }

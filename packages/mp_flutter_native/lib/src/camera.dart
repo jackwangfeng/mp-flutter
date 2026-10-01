@@ -9,6 +9,9 @@ import 'mp_native_view.dart';
 /// 只在对应的 [MpCamera] 已经在小程序环境里创建完成后才可用;其它情况下
 /// 调用任意方法都抛 [UnsupportedError]。
 class MpCameraController extends MpNativeControllerBinding {
+  /// 创建一个相机控制器;创建后需绑定到一个 [MpCamera] 才能真正发出命令。
+  MpCameraController();
+
   /// `wx.createCameraContext().takePhoto`;返回临时图片路径
   /// (`tempImagePath`)。
   Future<String> takePhoto({String quality = 'normal'}) async {
@@ -30,6 +33,7 @@ class MpCameraController extends MpNativeControllerBinding {
 ///
 /// 非 mp-flutter 编译的小程序环境下渲染 [fallback](默认空)。
 class MpCamera extends StatelessWidget {
+  /// 创建一个原生相机取景组件。
   const MpCamera({
     super.key,
     this.devicePosition = 'back',
@@ -39,16 +43,25 @@ class MpCamera extends StatelessWidget {
     this.fallback,
   });
 
+  /// 前后摄像头,`'back'`(默认)或 `'front'`。
   final String devicePosition;
+
+  /// 闪光灯模式:`'auto'`(默认)/`'on'`/`'off'`/`'torch'`。
   final String flash;
+
+  /// 控制这个相机组件(拍照等),见 [MpCameraController]。
   final MpCameraController? controller;
+
+  /// 原生相机报错回调,参数是错误信息。
   final ValueChanged<String>? onError;
+
+  /// 非 mp-flutter 编译的小程序环境下渲染的占位内容,默认空。
   final Widget? fallback;
 
   Map<String, Object?> _params() => {
-        'devicePosition': devicePosition,
-        'flash': flash,
-      };
+    'devicePosition': devicePosition,
+    'flash': flash,
+  };
 
   /// 仅测试/调试用,见 `MpVideo.debugParamsJson`。
   String debugParamsJson() => jsonEncode(_params());

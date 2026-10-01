@@ -1,0 +1,22 @@
+name: mp_flutter_native_example
+description: Minimal usage example for mp_flutter_native.
+publish_to: "none"
+version: 1.0.0
+
+environment:
+  sdk: ^3.11.0
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  mp_flutter_native:
+    path: ../
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

@@ -23,14 +23,19 @@ const _marker = '// [mp-flutter] module-scope global shadowing';
 /// true,额外遮蔽 `RegExp` 为垫片的包装(`__mp.RegExp`),在模拟器里复现安卓
 /// 真机不支持 Unicode 属性转义 `\p{…}` 的行为(见 bom-shim.js engineRegExp)。
 /// 正常构建不遮蔽,产物里 `RegExp` 仍是引擎原生构造函数。
-String injectPreamble(String source, {String shimPath = './bom-shim.js', bool shadowRegExp = false}) {
+String injectPreamble(
+  String source, {
+  String shimPath = './bom-shim.js',
+  bool shadowRegExp = false,
+}) {
   if (source.contains(_marker)) {
     throw const TransformFailure(
       'preamble 重复注入',
       'main.dart.js 已包含 mp-flutter preamble。检查构建管线是否重复处理了同一个文件。',
     );
   }
-  final preamble = '''
+  final preamble =
+      '''
 $_marker
 var __mp = require('$shimPath');
 var window = __mp.window, document = __mp.document, navigator = __mp.navigator,

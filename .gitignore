@@ -22,3 +22,7 @@ preview-qr.png
 preview-info.json
 qr-size.png
 微信图片_*.jpg
+.gstack/
+
+# flutter 命令行工具崩溃时在 cwd 写的报告(偶发,与本仓库改动无关)
+flutter_*.log

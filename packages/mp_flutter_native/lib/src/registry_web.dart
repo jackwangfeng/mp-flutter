@@ -30,7 +30,10 @@ external _NativeBridge? get _bridge;
 extension type _NativeBridge._(JSObject _) implements JSObject {
   @JS('command')
   external JSPromise<JSString> _command(
-      JSString id, JSString method, JSString argsJson);
+    JSString id,
+    JSString method,
+    JSString argsJson,
+  );
   external void register(JSString id);
   external void unregister(JSString id);
 }
@@ -71,8 +74,9 @@ void _removePendingId(String id) {
   if (!g.has('__mpNativePending')) return;
   final existing = g['__mpNativePending'];
   if (existing == null) return;
-  final list =
-      (existing as JSArray<JSString>).toDart.map((e) => e.toDart).toList();
+  final list = (existing as JSArray<JSString>).toDart
+      .map((e) => e.toDart)
+      .toList();
   if (!list.remove(id)) return;
   g['__mpNativePending'] = list.map((e) => e.toJS).toList().toJS;
 }
@@ -132,7 +136,10 @@ class _WebBackend implements MpNativeBackend {
   String _viewTypeFor(MpNativeKind kind) => 'mp-native-${kind.wireName}';
 
   web.HTMLDivElement _createElement(
-      MpNativeKind kind, int viewId, Object? params) {
+    MpNativeKind kind,
+    int viewId,
+    Object? params,
+  ) {
     final map = params is Map ? params : const {};
     final initialParamsJson = map['paramsJson'] as String? ?? '{}';
     final requestToken = map['requestToken'];
@@ -145,16 +152,17 @@ class _WebBackend implements MpNativeBackend {
       ..style.width = '100%'
       ..style.height = '100%';
     div.addEventListener(
-        'mpnative',
-        ((web.Event event) {
-          final handler = _handlers[viewId];
-          if (handler == null) return;
-          final detail = (event as web.CustomEvent).detail;
-          if (detail == null) return;
-          final raw = (detail as JSString).toDart;
-          final parsed = parseNativeEventJson(raw);
-          handler(parsed.type, parsed.detail);
-        }).toJS);
+      'mpnative',
+      ((web.Event event) {
+        final handler = _handlers[viewId];
+        if (handler == null) return;
+        final detail = (event as web.CustomEvent).detail;
+        if (detail == null) return;
+        final raw = (detail as JSString).toDart;
+        final parsed = parseNativeEventJson(raw);
+        handler(parsed.type, parsed.detail);
+      }).toJS,
+    );
 
     if (requestToken != null && _cancelledTokens.remove(requestToken)) {
       // 对应的 State 在工厂真正跑起来之前就已经 dispose 了(见
@@ -172,8 +180,10 @@ class _WebBackend implements MpNativeBackend {
   void _ensureFactoryRegistered(MpNativeKind kind) {
     final viewType = _viewTypeFor(kind);
     if (!_registeredViewTypes.add(viewType)) return;
-    ui_web.platformViewRegistry.registerViewFactory(viewType,
-        (int viewId, {Object? params}) => _createElement(kind, viewId, params));
+    ui_web.platformViewRegistry.registerViewFactory(
+      viewType,
+      (int viewId, {Object? params}) => _createElement(kind, viewId, params),
+    );
   }
 
   @override
@@ -201,7 +211,9 @@ class _WebBackend implements MpNativeBackend {
 
   @override
   void setEventHandler(
-      int viewId, void Function(String type, Object? detail)? handler) {
+    int viewId,
+    void Function(String type, Object? detail)? handler,
+  ) {
     if (handler == null) {
       _handlers.remove(viewId);
     } else {
@@ -228,15 +240,16 @@ class _WebBackend implements MpNativeBackend {
   }
 
   @override
-  Future<String> sendCommand(
-      int viewId, String method, String argsJson) async {
+  Future<String> sendCommand(int viewId, String method, String argsJson) async {
     final bridge = await _awaitBridge();
     if (bridge == null) {
       throw StateError(
-          'mp_flutter_native: 等待 __mpNative 就绪超时(${_bridgeWaitTimeout.inSeconds}s),$method 未发出');
+        'mp_flutter_native: 等待 __mpNative 就绪超时(${_bridgeWaitTimeout.inSeconds}s),$method 未发出',
+      );
     }
-    final result =
-        await bridge._command(viewId.toString().toJS, method.toJS, argsJson.toJS).toDart;
+    final result = await bridge
+        ._command(viewId.toString().toJS, method.toJS, argsJson.toJS)
+        .toDart;
     return result.toDart;
   }
 
@@ -247,11 +260,16 @@ class _WebBackend implements MpNativeBackend {
   /// `mp_flutter_wechat` 的 `debugSetChannel` 约定)。返回分配到的
   /// (人为构造的、与真实引擎 id 空间不冲突的负数)`viewId`。
   int debugSimulateFactoryRun(
-      MpNativeKind kind, Object requestToken, String paramsJson) {
+    MpNativeKind kind,
+    Object requestToken,
+    String paramsJson,
+  ) {
     _ensureFactoryRegistered(kind);
     final viewId = --_debugViewIdCounter;
-    _createElement(
-        kind, viewId, {'paramsJson': paramsJson, 'requestToken': requestToken});
+    _createElement(kind, viewId, {
+      'paramsJson': paramsJson,
+      'requestToken': requestToken,
+    });
     return viewId;
   }
 
@@ -269,7 +287,8 @@ int debugSimulateNativeFactoryRun(
 ) {
   if (backend is! _WebBackend) {
     throw UnsupportedError(
-        'debugSimulateNativeFactoryRun: backend 不是 _WebBackend(是否传错了 stub 实现?)');
+      'debugSimulateNativeFactoryRun: backend 不是 _WebBackend(是否传错了 stub 实现?)',
+    );
   }
   return backend.debugSimulateFactoryRun(kind, requestToken, paramsJson);
 }

@@ -154,14 +154,22 @@ String resolveFlutterBin(
 }) {
   final inferredSdk = projectPath == null
       ? null
-      : flutterSdkFromPackageConfig(projectPath, fileExists: fileExists, readFile: readFile);
+      : flutterSdkFromPackageConfig(
+          projectPath,
+          fileExists: fileExists,
+          readFile: readFile,
+        );
 
   if (override != null) {
     if (inferredSdk != null && override.contains(Platform.pathSeparator)) {
-      final overrideSdk =
-          p.normalize(p.dirname(p.dirname(p.normalize(p.absolute(override)))));
+      final overrideSdk = p.normalize(
+        p.dirname(p.dirname(p.normalize(p.absolute(override)))),
+      );
       if (overrideSdk != p.normalize(inferredSdk)) {
-        throw FlutterSdkMismatch(override, p.join(inferredSdk, 'bin', 'flutter'));
+        throw FlutterSdkMismatch(
+          override,
+          p.join(inferredSdk, 'bin', 'flutter'),
+        );
       }
     }
     return override;
@@ -182,8 +190,12 @@ String resolveFlutterBin(
 }
 
 Future<String> readFlutterVersion(String flutterBin) async {
-  final r = await Process.run(flutterBin, ['--version'],
-      environment: _environmentWithoutFlutterRoot(), includeParentEnvironment: false);
+  final r = await Process.run(
+    flutterBin,
+    ['--version'],
+    environment: _environmentWithoutFlutterRoot(),
+    includeParentEnvironment: false,
+  );
   if (r.exitCode != 0) {
     throw StateError('无法执行 $flutterBin --version:${r.stderr}');
   }
@@ -241,10 +253,13 @@ Future<Directory> runFlutterWebBuild({
     target: target,
   );
 
-  final r = await Process.run(flutterBin, args,
-      workingDirectory: projectPath,
-      environment: _environmentWithoutFlutterRoot(),
-      includeParentEnvironment: false);
+  final r = await Process.run(
+    flutterBin,
+    args,
+    workingDirectory: projectPath,
+    environment: _environmentWithoutFlutterRoot(),
+    includeParentEnvironment: false,
+  );
   if (r.exitCode != 0) {
     throw FlutterBuildFailure(r.exitCode, '${r.stdout}\n${r.stderr}');
   }

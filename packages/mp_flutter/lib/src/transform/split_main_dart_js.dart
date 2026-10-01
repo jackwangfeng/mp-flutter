@@ -26,8 +26,8 @@ Future<String> resolveDartSplitTool({String? packageRoot}) async {
     throw ToolchainMissing(
       'dart-split(js/split.js)',
       'main.dart.js 超过单分包 2048KB 时要在构建期分片,找不到分片器:$tool\n'
-      'flutter_miniprogram 包可能安装不完整或版本过旧,请重新执行 `dart pub get`'
-      '(或 `flutter pub get`)。',
+          'flutter_miniprogram 包可能安装不完整或版本过旧,请重新执行 `dart pub get`'
+          '(或 `flutter pub get`)。',
     );
   }
   return tool;
@@ -41,21 +41,31 @@ void checkNodeAvailable({String nodeBin = 'node'}) {
   try {
     r = Process.runSync(nodeBin, ['--version']);
   } on ProcessException catch (e) {
-    throw ToolchainMissing('node', '找不到 node($e)。main.dart.js 分片需要 Node ≥18,请先安装。');
+    throw ToolchainMissing(
+      'node',
+      '找不到 node($e)。main.dart.js 分片需要 Node ≥18,请先安装。',
+    );
   }
   if (r.exitCode != 0) {
-    throw ToolchainMissing('node', 'node --version 返回 ${r.exitCode}:${r.stderr}');
+    throw ToolchainMissing(
+      'node',
+      'node --version 返回 ${r.exitCode}:${r.stderr}',
+    );
   }
   final versionOut = '${r.stdout}'.trim();
   final match = RegExp(r'^v?(\d+)\.').firstMatch(versionOut);
   if (match == null) {
-    throw ToolchainMissing('node',
-        '无法解析 node --version 的输出($versionOut),main.dart.js 分片需要 Node ≥18。');
+    throw ToolchainMissing(
+      'node',
+      '无法解析 node --version 的输出($versionOut),main.dart.js 分片需要 Node ≥18。',
+    );
   }
   final major = int.parse(match.group(1)!);
   if (major < 18) {
-    throw ToolchainMissing('node',
-        '当前 node 版本过低($versionOut),main.dart.js 分片需要 Node ≥18,请升级后重试。');
+    throw ToolchainMissing(
+      'node',
+      '当前 node 版本过低($versionOut),main.dart.js 分片需要 Node ≥18,请升级后重试。',
+    );
   }
 }
 
@@ -70,18 +80,29 @@ Future<List<String>> splitMainDartJs(
   final tool = toolPath ?? await resolveDartSplitTool();
   final tmp = await Directory.systemTemp.createTemp('mp_flutter_split_');
   try {
-    final inFile = File(p.join(tmp.path, 'main.dart.js'))..writeAsStringSync(source);
+    final inFile = File(p.join(tmp.path, 'main.dart.js'))
+      ..writeAsStringSync(source);
     final outDir = p.join(tmp.path, 'out');
     final r = await Process.run(nodeBin, [
-      tool, '--in', inFile.path, '--out-dir', outDir,
-      '--budget', '$budgetBytes', '--scope-require', scopeRequire,
+      tool,
+      '--in',
+      inFile.path,
+      '--out-dir',
+      outDir,
+      '--budget',
+      '$budgetBytes',
+      '--scope-require',
+      scopeRequire,
     ]);
     if (r.exitCode != 0) {
       throw TransformFailure('main.dart.js 分片', '${r.stderr}'.trim());
     }
-    final count = (jsonDecode('${r.stdout}'.trim()) as Map<String, dynamic>)['count'] as int;
+    final count =
+        (jsonDecode('${r.stdout}'.trim()) as Map<String, dynamic>)['count']
+            as int;
     return [
-      for (var i = 0; i < count; i++) File(p.join(outDir, 'chunk-$i.js')).readAsStringSync(),
+      for (var i = 0; i < count; i++)
+        File(p.join(outDir, 'chunk-$i.js')).readAsStringSync(),
     ];
   } finally {
     await tmp.delete(recursive: true);

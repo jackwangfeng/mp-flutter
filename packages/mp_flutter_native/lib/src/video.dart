@@ -14,26 +14,35 @@ import 'mp_native_view.dart';
 /// 驱动),不要在创建后立刻调 [play]——那一刻原生组件很可能还没渲染完成,
 /// 命令会先进 Task 2 同步层的排队(最多等 5s),不如直接用 autoplay。
 class MpVideoController extends MpNativeControllerBinding {
+  /// 创建一个视频控制器;创建后需绑定到一个 [MpVideo] 才能真正发出命令。
+  MpVideoController();
+
+  /// 开始/恢复播放。
   Future<void> play() async {
     await sendCommand('play');
   }
 
+  /// 暂停播放。
   Future<void> pause() async {
     await sendCommand('pause');
   }
 
+  /// 跳转到指定播放位置,单位秒。
   Future<void> seek(double seconds) async {
     await sendCommand('seek', {'position': seconds});
   }
 
+  /// 停止播放(与 [pause] 不同,会重置播放进度)。
   Future<void> stop() async {
     await sendCommand('stop');
   }
 
+  /// 进入全屏播放。
   Future<void> requestFullScreen() async {
     await sendCommand('requestFullScreen');
   }
 
+  /// 退出全屏播放。
   Future<void> exitFullScreen() async {
     await sendCommand('exitFullScreen');
   }
@@ -49,6 +58,8 @@ class MpVideoController extends MpNativeControllerBinding {
 /// 非 mp-flutter 编译的小程序环境(含 stub 平台与普通浏览器)下渲染
 /// [fallback](默认空)。
 class MpVideo extends StatelessWidget {
+  /// 创建一个原生视频组件。首次播放优先用 [autoplay],见
+  /// [MpVideoController] 的说明。
   const MpVideo({
     super.key,
     required this.src,
@@ -67,30 +78,57 @@ class MpVideo extends StatelessWidget {
     this.fallback,
   });
 
+  /// 视频地址。
   final String src;
+
+  /// 是否自动播放;优先用这个而不是创建后立刻调用 `controller.play()`。
   final bool autoplay;
+
+  /// 是否循环播放。
   final bool loop;
+
+  /// 是否静音播放。
   final bool muted;
+
+  /// 是否展示默认的播放控件。
   final bool controls;
+
+  /// 封面图地址。
   final String? poster;
+
+  /// 视频填充方式,如 `'contain'`(默认)/`'fill'`/`'cover'`。
   final String objectFit;
+
+  /// 控制这个视频组件(播放/暂停/跳转等),见 [MpVideoController]。
   final MpVideoController? controller;
+
+  /// 开始播放回调。
   final VoidCallback? onPlay;
+
+  /// 暂停播放回调。
   final VoidCallback? onPause;
+
+  /// 播放结束回调。
   final VoidCallback? onEnded;
+
+  /// 播放进度更新回调,参数是当前播放位置(秒)。
   final ValueChanged<double>? onTimeUpdate;
+
+  /// 播放出错回调,参数是错误信息。
   final ValueChanged<String>? onError;
+
+  /// 非 mp-flutter 编译的小程序环境下渲染的占位内容,默认空。
   final Widget? fallback;
 
   Map<String, Object?> _params() => {
-        'src': src,
-        'autoplay': autoplay,
-        'loop': loop,
-        'muted': muted,
-        'controls': controls,
-        if (poster != null) 'poster': poster,
-        'objectFit': objectFit,
-      };
+    'src': src,
+    'autoplay': autoplay,
+    'loop': loop,
+    'muted': muted,
+    'controls': controls,
+    if (poster != null) 'poster': poster,
+    'objectFit': objectFit,
+  };
 
   /// 仅测试/调试用:当前会写进 `data-mp-params` 的 JSON 字符串。方法名以
   /// `debug` 开头,不引入 `package:meta` 依赖(同 `mp_flutter_wechat` 的

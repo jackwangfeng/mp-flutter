@@ -28,7 +28,9 @@ import 'canvaskit_js.dart' show TransformFailure;
 /// 结构不符合预期(不是 wasm、找不到 ICU 数据、词典是最后一个条目等)一律抛
 /// [TransformFailure],不静默产出未瘦身的文件 —— 那样会在体积校验时才以
 /// "分包超限"的形式报错,指向完全无关的地方。
-({Uint8List bytes, List<String> removed, int zeroedBytes}) stripIcuDictionaries(Uint8List wasm) {
+({Uint8List bytes, List<String> removed, int zeroedBytes}) stripIcuDictionaries(
+  Uint8List wasm,
+) {
   final segments = _dataSegments(wasm);
   final memory = _memoryImage(wasm, segments);
   final icu = _findIcuCommonData(memory);
@@ -46,8 +48,10 @@ import 'canvaskit_js.dart' show TransformFailure;
     final item = icu[i];
     if (!_isDictionary(item.name)) continue;
     if (i + 1 >= icu.length) {
-      throw TransformFailure('ICU 词典 ${item.name} 是目录表最后一项',
-          '无法确定它的长度(靠下一项的偏移算),ICU 数据布局可能变了。');
+      throw TransformFailure(
+        'ICU 词典 ${item.name} 是目录表最后一项',
+        '无法确定它的长度(靠下一项的偏移算),ICU 数据布局可能变了。',
+      );
     }
     final lo = item.address, hi = icu[i + 1].address;
     if (hi <= lo) {
@@ -57,7 +61,11 @@ import 'canvaskit_js.dart' show TransformFailure;
       final start = lo > s.address ? lo : s.address;
       final end = hi < s.address + s.length ? hi : s.address + s.length;
       if (start < end) {
-        out.fillRange(s.fileOffset + (start - s.address), s.fileOffset + (end - s.address), 0);
+        out.fillRange(
+          s.fileOffset + (start - s.address),
+          s.fileOffset + (end - s.address),
+          0,
+        );
       }
     }
     removed.add(item.name);
@@ -69,18 +77,19 @@ import 'canvaskit_js.dart' show TransformFailure;
 /// ICU 断词词典:`<包名>/brkitr/<名字>.dict`(thaidict/laodict/khmerdict/burmesedict,
 /// 将来若带上 cjdict 也一样清零 —— 中日文没有词典时按 `*.brk` 规则逐字可断,
 /// 与现在 Flutter 自带的 ICU 数据一致)。
-bool _isDictionary(String name) => name.contains('/brkitr/') && name.endsWith('.dict');
+bool _isDictionary(String name) =>
+    name.contains('/brkitr/') && name.endsWith('.dict');
 
 class _Segment {
-  final int address;   // 线性内存地址
+  final int address; // 线性内存地址
   final int length;
-  final int fileOffset;   // 段内容在 wasm 文件里的起点
+  final int fileOffset; // 段内容在 wasm 文件里的起点
   const _Segment(this.address, this.length, this.fileOffset);
 }
 
 class _IcuItem {
   final String name;
-  final int address;   // 条目内容的线性内存地址
+  final int address; // 条目内容的线性内存地址
   const _IcuItem(this.name, this.address);
 }
 
@@ -119,8 +128,16 @@ class _Reader {
 /// 解析数据段(section 11)。只接受活动段 + `i32.const` 偏移(emscripten 的产物);
 /// 被动段(flag 1)没有固定地址,出现就报错 —— 这时"按地址清零"不成立。
 List<_Segment> _dataSegments(Uint8List b) {
-  if (b.length < 8 || b[0] != 0 || b[1] != 0x61 || b[2] != 0x73 || b[3] != 0x6d || b[4] != 1) {
-    throw const TransformFailure('canvaskit.wasm 不是 wasm v1 文件', '文件头不是 \\0asm 01。');
+  if (b.length < 8 ||
+      b[0] != 0 ||
+      b[1] != 0x61 ||
+      b[2] != 0x73 ||
+      b[3] != 0x6d ||
+      b[4] != 1) {
+    throw const TransformFailure(
+      'canvaskit.wasm 不是 wasm v1 文件',
+      '文件头不是 \\0asm 01。',
+    );
   }
   final r = _Reader(b, 8);
   final segments = <_Segment>[];
@@ -132,16 +149,25 @@ List<_Segment> _dataSegments(Uint8List b) {
       final count = r.uleb();
       for (var i = 0; i < count; i++) {
         final flags = r.uleb();
-        if (flags == 2) r.uleb();   // 显式内存索引
+        if (flags == 2) r.uleb(); // 显式内存索引
         if (flags != 0 && flags != 2) {
-          throw TransformFailure('canvaskit.wasm 含被动数据段(flags=$flags)', '按地址清零 ICU 词典的前提不成立。');
+          throw TransformFailure(
+            'canvaskit.wasm 含被动数据段(flags=$flags)',
+            '按地址清零 ICU 词典的前提不成立。',
+          );
         }
         if (r.byte() != 0x41) {
-          throw const TransformFailure('canvaskit.wasm 数据段偏移不是 i32.const', '数据段结构不是预期的 emscripten 产物。');
+          throw const TransformFailure(
+            'canvaskit.wasm 数据段偏移不是 i32.const',
+            '数据段结构不是预期的 emscripten 产物。',
+          );
         }
         final address = r.sleb();
         if (r.byte() != 0x0b) {
-          throw const TransformFailure('canvaskit.wasm 数据段偏移表达式未以 end 结束', '数据段结构不是预期的 emscripten 产物。');
+          throw const TransformFailure(
+            'canvaskit.wasm 数据段偏移表达式未以 end 结束',
+            '数据段结构不是预期的 emscripten 产物。',
+          );
         }
         final length = r.uleb();
         segments.add(_Segment(address, length, r.pos));
@@ -174,9 +200,16 @@ Uint8List _memoryImage(Uint8List b, List<_Segment> segments) {
 List<_IcuItem>? _findIcuCommonData(Uint8List m) {
   final data = ByteData.sublistView(m);
   for (var i = 12; i + 4 <= m.length; i++) {
-    if (m[i] != 0x43 || m[i + 1] != 0x6d || m[i + 2] != 0x6e || m[i + 3] != 0x44) continue;   // "CmnD"
+    if (m[i] != 0x43 ||
+        m[i + 1] != 0x6d ||
+        m[i + 2] != 0x6e ||
+        m[i + 3] != 0x44) {
+      continue; // "CmnD"
+    }
     final h = i - 12;
-    if (m[h + 2] != 0xda || m[h + 3] != 0x27 || m[h + 8] != 0) continue;   // 魔数 + 小端
+    if (m[h + 2] != 0xda || m[h + 3] != 0x27 || m[h + 8] != 0) {
+      continue; // 魔数 + 小端
+    }
     final headerSize = data.getUint16(h, Endian.little);
     final toc = h + headerSize;
     final count = data.getUint32(toc, Endian.little);
@@ -189,7 +222,12 @@ List<_IcuItem>? _findIcuCommonData(Uint8List m) {
       while (end < m.length && m[end] != 0) {
         end++;
       }
-      items.add(_IcuItem(ascii.decode(m.sublist(toc + nameOffset, end), allowInvalid: true), toc + dataOffset));
+      items.add(
+        _IcuItem(
+          ascii.decode(m.sublist(toc + nameOffset, end), allowInvalid: true),
+          toc + dataOffset,
+        ),
+      );
     }
     return items;
   }

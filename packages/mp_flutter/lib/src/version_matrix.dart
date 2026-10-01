@@ -42,7 +42,9 @@ class FlutterVersion {
     final m = _re.firstMatch(flutterVersionOutput);
     if (m == null) {
       throw FormatException(
-          '无法从 flutter --version 输出中解析版本号', flutterVersionOutput);
+        '无法从 flutter --version 输出中解析版本号',
+        flutterVersionOutput,
+      );
     }
     final v = m.group(1)!;
     return FlutterVersion(v, isOhosFork: v.contains('ohos'));
@@ -51,10 +53,7 @@ class FlutterVersion {
 
 class VersionMatrix {
   /// 已通过回归套件验证的版本。新增版本前必须先跑 tools/e2e。
-  static const supported = <String>[
-    '3.41.9',
-    '3.41.10-ohos-0.0.2-beta',
-  ];
+  static const supported = <String>['3.41.9', '3.41.10-ohos-0.0.2-beta'];
 
   /// 已知的版本分叉差异映射。
   static const _knownDivergences = <String, List<KnownDivergence>>{

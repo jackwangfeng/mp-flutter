@@ -25,8 +25,11 @@ const kDefaultFontFamilies = ['roboto', 'notosanssc'];
 const _woff2Magic = [0x77, 0x4F, 0x46, 0x32];
 
 bool _isWoff2(List<int> b) =>
-    b.length >= 4 && b[0] == _woff2Magic[0] && b[1] == _woff2Magic[1] &&
-    b[2] == _woff2Magic[2] && b[3] == _woff2Magic[3];
+    b.length >= 4 &&
+    b[0] == _woff2Magic[0] &&
+    b[1] == _woff2Magic[1] &&
+    b[2] == _woff2Magic[2] &&
+    b[3] == _woff2Magic[3];
 
 /// 单个字体文件的下载总时限(含读正文)。`connectionTimeout` 只管建连,
 /// 服务器发完响应头后停住时 `await for` 会永远挂住,构建无声卡死。
@@ -68,7 +71,10 @@ List<String> extractFallbackFontPaths(
 
 String defaultFontCacheDir() {
   final xdg = Platform.environment['XDG_CACHE_HOME'];
-  final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.';
+  final home =
+      Platform.environment['HOME'] ??
+      Platform.environment['USERPROFILE'] ??
+      '.';
   return p.join(xdg ?? p.join(home, '.cache'), 'mp_flutter', 'fonts');
 }
 
@@ -96,8 +102,13 @@ Future<Map<String, List<int>>> fetchFallbackFonts(
           ..findProxy = HttpClient.findProxyFromEnvironment
           ..connectionTimeout = const Duration(seconds: 20);
         final url = '$baseUrl$rel';
-        final bytes = await _download(client, url).timeout(_downloadTimeout,
-            onTimeout: () => throw FontFetchFailure(url, '下载超时(${_downloadTimeout.inSeconds}s)'));
+        final bytes = await _download(client, url).timeout(
+          _downloadTimeout,
+          onTimeout: () => throw FontFetchFailure(
+            url,
+            '下载超时(${_downloadTimeout.inSeconds}s)',
+          ),
+        );
         if (!_isWoff2(bytes)) {
           throw FontFetchFailure(url, '返回内容不是 woff2 字体(可能是代理/登录页),未写入缓存');
         }
@@ -200,7 +211,10 @@ const _scatteredSdThreshold = 3000;
 /// [fallbackFontCodepointRank] 的纯函数部分(便于单测)。
 Map<String, num> decodeFallbackFontRank(String src) {
   final fonts = [
-    for (final m in RegExp(r"NotoFont\(\s*'([^']*)',\s*'([^']*)',?\s*\)").allMatches(src)) m.group(2)!
+    for (final m in RegExp(
+      r"NotoFont\(\s*'([^']*)',\s*'([^']*)',?\s*\)",
+    ).allMatches(src))
+      m.group(2)!,
   ];
   String constant(String name) {
     final i = src.indexOf('const String $name =');
@@ -301,11 +315,15 @@ String normalizeFontBaseUrl(String url) {
   final u = url.trim();
   final uri = Uri.tryParse(u);
   if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
-    throw FormatException('font_base_url 必须是 https:// 开头的完整 URL'
-        '(真机 wx.request 只允许后台配置过的 https 合法域名),实际是:$url');
+    throw FormatException(
+      'font_base_url 必须是 https:// 开头的完整 URL'
+      '(真机 wx.request 只允许后台配置过的 https 合法域名),实际是:$url',
+    );
   }
   if (uri.hasQuery || uri.hasFragment) {
-    throw FormatException('font_base_url 不能带查询串或 #片段(运行时直接在后面拼字体相对路径),实际是:$url');
+    throw FormatException(
+      'font_base_url 不能带查询串或 #片段(运行时直接在后面拼字体相对路径),实际是:$url',
+    );
   }
   return u.endsWith('/') ? u : '$u/';
 }

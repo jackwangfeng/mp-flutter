@@ -67,8 +67,10 @@ Future<List<DoctorCheck>> runDoctorChecks({
   void Function() checkBrotli = checkBrotliAvailable,
   Future<String> Function({String? override, bool probeOnly}) resolveEsbuildFn =
       _resolveEsbuildDefault,
-  Future<String> Function(String flutterBin) readFlutterVersionFn = readFlutterVersion,
-  String Function(String? override, {String? projectPath}) resolveFlutterBinFn = resolveFlutterBin,
+  Future<String> Function(String flutterBin) readFlutterVersionFn =
+      readFlutterVersion,
+  String Function(String? override, {String? projectPath}) resolveFlutterBinFn =
+      resolveFlutterBin,
   bool Function(String path) pathExists = _pathExistsDefault,
   List<String> Function() wechatCliCandidatesFn = wechatCliCandidates,
 }) async {
@@ -79,20 +81,29 @@ Future<List<DoctorCheck>> runDoctorChecks({
     checkNode();
     checks.add(const DoctorCheck(label: 'Node (≥18)', ok: true, detail: ' 可用'));
   } on ToolchainMissing catch (e) {
-    checks.add(DoctorCheck(label: 'Node (≥18)', ok: false, detail: ' ${e.message}'));
+    checks.add(
+      DoctorCheck(label: 'Node (≥18)', ok: false, detail: ' ${e.message}'),
+    );
   }
 
   // 2. esbuild —— 只探测,不触发自动安装。探测不到时不算失败:构建时会
   //    自动装,这里只是提前告知。
   try {
-    final path = await resolveEsbuildFn(override: esbuildOverride, probeOnly: true);
+    final path = await resolveEsbuildFn(
+      override: esbuildOverride,
+      probeOnly: true,
+    );
     checks.add(DoctorCheck(label: 'esbuild', ok: true, detail: ' 已就绪($path)'));
   } on EsbuildNotInstalled catch (e) {
-    checks.add(DoctorCheck(label: 'esbuild', ok: true, detail: ' 尚未安装,${e.hint}'));
+    checks.add(
+      DoctorCheck(label: 'esbuild', ok: true, detail: ' 尚未安装,${e.hint}'),
+    );
   } on ToolchainMissing catch (e) {
     // 只有显式指定了坏路径(--esbuild/MP_FLUTTER_ESBUILD)才会走到这——
     // 这才是真的配置错误,判 ✗。
-    checks.add(DoctorCheck(label: 'esbuild', ok: false, detail: ' ${e.message}'));
+    checks.add(
+      DoctorCheck(label: 'esbuild', ok: false, detail: ' ${e.message}'),
+    );
   }
 
   // 3. brotli(I2):canvaskit.wasm 压缩依赖,macOS/Linux 都不预装。
@@ -100,7 +111,9 @@ Future<List<DoctorCheck>> runDoctorChecks({
     checkBrotli();
     checks.add(const DoctorCheck(label: 'brotli', ok: true, detail: ' 可用'));
   } on ToolchainMissing catch (e) {
-    checks.add(DoctorCheck(label: 'brotli', ok: false, detail: ' ${e.message}'));
+    checks.add(
+      DoctorCheck(label: 'brotli', ok: false, detail: ' ${e.message}'),
+    );
   }
 
   // 4. flutter 可执行 + 版本(是否在已验证矩阵内只是标注,不影响 ✓/✗——
@@ -111,22 +124,33 @@ Future<List<DoctorCheck>> runDoctorChecks({
   try {
     bin = resolveFlutterBinFn(flutterBin, projectPath: projectPath);
   } on FlutterSdkMismatch catch (e) {
-    checks.add(DoctorCheck(label: 'flutter', ok: false, detail: ' ${e.message}'));
+    checks.add(
+      DoctorCheck(label: 'flutter', ok: false, detail: ' ${e.message}'),
+    );
   }
   if (bin != null) {
     try {
       final out = await readFlutterVersionFn(bin);
       final version = FlutterVersion.parse(out);
       final verified = VersionMatrix.supported.contains(version.version);
-      checks.add(DoctorCheck(
-        label: 'flutter',
-        ok: true,
-        detail: ' $bin — ${version.version}'
-            '${version.isOhosFork ? ' (ohos fork)' : ''}'
-            '(${verified ? '已验证' : '未验证'})',
-      ));
+      checks.add(
+        DoctorCheck(
+          label: 'flutter',
+          ok: true,
+          detail:
+              ' $bin — ${version.version}'
+              '${version.isOhosFork ? ' (ohos fork)' : ''}'
+              '(${verified ? '已验证' : '未验证'})',
+        ),
+      );
     } catch (e) {
-      checks.add(DoctorCheck(label: 'flutter', ok: false, detail: ' $bin 不可执行或版本无法解析:$e'));
+      checks.add(
+        DoctorCheck(
+          label: 'flutter',
+          ok: false,
+          detail: ' $bin 不可执行或版本无法解析:$e',
+        ),
+      );
     }
   }
 
@@ -134,27 +158,44 @@ Future<List<DoctorCheck>> runDoctorChecks({
   //    产物——缺失只警告,不计入 doctor 整体退出码,见 DoctorCheck.warnOnly)。
   final candidates = wechatCliCandidatesFn();
   if (candidates.isEmpty) {
-    checks.add(const DoctorCheck(
-        label: '微信开发者工具 CLI', ok: true, detail: ' 当前平台无已知默认路径,跳过检测'));
+    checks.add(
+      const DoctorCheck(
+        label: '微信开发者工具 CLI',
+        ok: true,
+        detail: ' 当前平台无已知默认路径,跳过检测',
+      ),
+    );
   } else {
     final found = candidates.where(pathExists).toList();
     if (found.isNotEmpty) {
-      checks.add(DoctorCheck(label: '微信开发者工具 CLI', ok: true, detail: ' 已找到:${found.first}'));
+      checks.add(
+        DoctorCheck(
+          label: '微信开发者工具 CLI',
+          ok: true,
+          detail: ' 已找到:${found.first}',
+        ),
+      );
     } else {
-      checks.add(DoctorCheck(
-        label: '微信开发者工具 CLI',
-        ok: false,
-        warnOnly: true,
-        detail: ' 未在默认路径找到(${candidates.join('; ')})。'
-            '不影响 flutter_miniprogram 构建,仅影响命令行自动上传/预览。',
-      ));
+      checks.add(
+        DoctorCheck(
+          label: '微信开发者工具 CLI',
+          ok: false,
+          warnOnly: true,
+          detail:
+              ' 未在默认路径找到(${candidates.join('; ')})。'
+              '不影响 flutter_miniprogram 构建,仅影响命令行自动上传/预览。',
+        ),
+      );
     }
   }
 
   return checks;
 }
 
-Future<String> _resolveEsbuildDefault({String? override, bool probeOnly = false}) {
+Future<String> _resolveEsbuildDefault({
+  String? override,
+  bool probeOnly = false,
+}) {
   return resolveEsbuild(override: override, probeOnly: probeOnly);
 }
 

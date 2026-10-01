@@ -1,0 +1,21 @@
+name: mp_flutter_wechat_example
+description: Minimal usage example for mp_flutter_wechat.
+publish_to: "none"
+version: 1.0.0
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  mp_flutter_wechat:
+    path: ../
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

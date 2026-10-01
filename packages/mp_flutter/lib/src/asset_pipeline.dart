@@ -57,11 +57,11 @@ const kAssetPackageBudgetBytes = 2000 * 1024;
 /// 依赖多时的 NOTICES),这时切成若干分片,各自成模块、可落在不同分包,
 /// 运行时并行加载后按 [chunkIndex] 顺序拼接。
 class AssetModule {
-  final String originalPath;   // 如 assets/fonts/Roboto.ttf
-  final String package;        // 如 pkg-assets-0
-  final String modulePath;     // 如 pkg-assets-0/a/assets_fonts_Roboto_ttf_xxx.js
+  final String originalPath; // 如 assets/fonts/Roboto.ttf
+  final String package; // 如 pkg-assets-0
+  final String modulePath; // 如 pkg-assets-0/a/assets_fonts_Roboto_ttf_xxx.js
   final String source;
-  final int originalBytes;     // 本分片解码后的字节数
+  final int originalBytes; // 本分片解码后的字节数
   final int encodedBytes;
   final int chunkIndex;
   final int chunkCount;
@@ -86,7 +86,11 @@ class AssetBundle {
   /// 其中首帧前必须就位的分包(boot.js 启动时并行拉取);其余分包只在引擎
   /// 真正 fetch 其中某个资源时,经该资源自己的 require.async 按需下载。
   final List<String> bootPackageRoots;
-  const AssetBundle(this.modules, this.packageRoots, {this.bootPackageRoots = const []});
+  const AssetBundle(
+    this.modules,
+    this.packageRoots, {
+    this.bootPackageRoots = const [],
+  });
 
   int get totalEncodedBytes =>
       modules.fold(0, (sum, m) => sum + m.encodedBytes);
@@ -164,7 +168,10 @@ List<AssetGroup> planAssetGroups(
   bool excludeFallbackFonts = false,
   void Function(String message)? warn,
 }) {
-  final declared = parseFontManifest(assets['assets/FontManifest.json'], warn: warn);
+  final declared = parseFontManifest(
+    assets['assets/FontManifest.json'],
+    warn: warn,
+  );
   final bootFontAssets = {for (final f in declared.assets) 'assets/$f'};
   final robotoDeclared = declared.families.contains('Roboto');
 
@@ -197,20 +204,33 @@ List<AssetGroup> planAssetGroups(
   other.sort(); // 按路径:同目录(同类)资源相邻,落进同一个按需分包
 
   return [
-    if (boot.isNotEmpty) AssetGroup(name: kBootAssetPackage, boot: true, paths: boot),
+    if (boot.isNotEmpty)
+      AssetGroup(name: kBootAssetPackage, boot: true, paths: boot),
     if (notices.isNotEmpty) AssetGroup(name: kNoticesPackage, paths: notices),
     if (fonts.isNotEmpty)
-      AssetGroup(name: kFontPackagePrefix, numbered: true, sequential: true,
-          budgetBytes: kOnDemandPackageBudgetBytes, paths: fonts),
+      AssetGroup(
+        name: kFontPackagePrefix,
+        numbered: true,
+        sequential: true,
+        budgetBytes: kOnDemandPackageBudgetBytes,
+        paths: fonts,
+      ),
     if (other.isNotEmpty)
-      AssetGroup(name: kAssetPackagePrefix, numbered: true, sequential: true,
-          budgetBytes: kOnDemandPackageBudgetBytes, paths: other),
+      AssetGroup(
+        name: kAssetPackagePrefix,
+        numbered: true,
+        sequential: true,
+        budgetBytes: kOnDemandPackageBudgetBytes,
+        paths: other,
+      ),
   ];
 }
 
 /// `FontManifest.json` 里声明的家族名与字体资源路径(相对 `assets/`)。
-({Set<String> families, List<String> assets}) parseFontManifest(List<int>? bytes,
-    {void Function(String message)? warn}) {
+({Set<String> families, List<String> assets}) parseFontManifest(
+  List<int>? bytes, {
+  void Function(String message)? warn,
+}) {
   final families = <String>{};
   final out = <String>[];
   if (bytes == null) return (families: families, assets: out);
@@ -223,8 +243,10 @@ List<AssetGroup> planAssetGroups(
       }
     }
   } catch (e) {
-    warn?.call('⚠️  FontManifest.json 解析失败($e),其中的字体按普通资源按需加载;'
-        '引擎启动时会等这些字体,首帧会因此多等一次分包下载。');
+    warn?.call(
+      '⚠️  FontManifest.json 解析失败($e),其中的字体按普通资源按需加载;'
+      '引擎启动时会等这些字体,首帧会因此多等一次分包下载。',
+    );
   }
   return (families: families, assets: out);
 }
@@ -246,13 +268,15 @@ AssetBundle buildAssetBundle(
   final chunkChars = maxChunkChars ?? ((packageBudgetBytes - 1024) ~/ 4) * 4;
   assert(chunkChars > 0 && chunkChars % 4 == 0);
 
-  final plan = groups ??
+  final plan =
+      groups ??
       [
         AssetGroup(
-            name: kAssetPackagePrefix,
-            numbered: true,
-            budgetBytes: packageBudgetBytes,
-            paths: (assets.keys.toList()..sort())),
+          name: kAssetPackagePrefix,
+          numbered: true,
+          budgetBytes: packageBudgetBytes,
+          paths: (assets.keys.toList()..sort()),
+        ),
       ];
 
   final modules = <AssetModule>[];
@@ -277,7 +301,11 @@ AssetBundle buildAssetBundle(
       int idx;
       if (g.sequential) {
         idx = used.isEmpty ? -1 : used.length - 1;
-        if (idx >= 0 && used[idx] > 0 && used[idx] + m.encoded > g.budgetBytes) idx = -1;
+        if (idx >= 0 &&
+            used[idx] > 0 &&
+            used[idx] + m.encoded > g.budgetBytes) {
+          idx = -1;
+        }
       } else {
         idx = used.indexWhere((u) => u + m.encoded <= g.budgetBytes);
       }
@@ -287,22 +315,28 @@ AssetBundle buildAssetBundle(
       }
       used[idx] += m.encoded;
       if (g.hostPackage != null && idx > 0) {
-        throw StateError('资源组 ${g.name} 要并进 ${g.hostPackage},但一个包装不下(调用方应先用 estimateGroupBytes 确认)');
+        throw StateError(
+          '资源组 ${g.name} 要并进 ${g.hostPackage},但一个包装不下(调用方应先用 estimateGroupBytes 确认)',
+        );
       }
       final dir = g.rootFor(idx);
       final pkg = g.hostPackage ?? dir;
       var file = sanitizeAssetModulePath(m.path);
-      if (m.count > 1) file = file.replaceFirst(RegExp(r'\.js$'), '_p${m.index}.js');
-      modules.add(AssetModule(
-        originalPath: m.path,
-        package: pkg,
-        modulePath: '$dir/$file',
-        source: m.source,
-        originalBytes: base64Decode(m.b64).length,
-        encodedBytes: m.encoded,
-        chunkIndex: m.index,
-        chunkCount: m.count,
-      ));
+      if (m.count > 1) {
+        file = file.replaceFirst(RegExp(r'\.js$'), '_p${m.index}.js');
+      }
+      modules.add(
+        AssetModule(
+          originalPath: m.path,
+          package: pkg,
+          modulePath: '$dir/$file',
+          source: m.source,
+          originalBytes: base64Decode(m.b64).length,
+          encodedBytes: m.encoded,
+          chunkIndex: m.index,
+          chunkCount: m.count,
+        ),
+      );
     }
     // 并进已有包的组不产生新分包(主包不是分包;dart 分包已在分包表里)
     if (g.hostPackage != null) continue;
@@ -348,15 +382,25 @@ const kMainBootAssetDir = 'mp-assets-boot';
   int mainCeilingBytes = kBootAssetsMainCeilingBytes,
   int dartCeilingBytes = kBootAssetsDartCeilingBytes,
 }) {
-  final i = groups.indexWhere((g) => g.boot && g.name == kBootAssetPackage && g.hostPackage == null);
-  if (i < 0 || mode == 'package') return (groups: groups, where: kBootAssetPackage);
+  final i = groups.indexWhere(
+    (g) => g.boot && g.name == kBootAssetPackage && g.hostPackage == null,
+  );
+  if (i < 0 || mode == 'package') {
+    return (groups: groups, where: kBootAssetPackage);
+  }
   final g = groups[i];
   final size = estimateGroupBytes(assets, g.paths);
   AssetGroup? moved;
   String where = kBootAssetPackage;
-  if ((mode == 'auto' || mode == 'main') && mainBytes + size <= mainCeilingBytes) {
-    moved = AssetGroup(name: kMainBootAssetDir, boot: true, paths: g.paths, hostPackage: 'main',
-        budgetBytes: 1 << 40);
+  if ((mode == 'auto' || mode == 'main') &&
+      mainBytes + size <= mainCeilingBytes) {
+    moved = AssetGroup(
+      name: kMainBootAssetDir,
+      boot: true,
+      paths: g.paths,
+      hostPackage: 'main',
+      budgetBytes: 1 << 40,
+    );
     where = 'main';
   } else if (dartPackageBytes.isNotEmpty) {
     final byRoom = dartPackageBytes.entries.toList()
@@ -366,8 +410,13 @@ const kMainBootAssetDir = 'mp-assets-boot';
       });
     final best = byRoom.first;
     if (best.value + size <= dartCeilingBytes) {
-      moved = AssetGroup(name: '${best.key}/boot', boot: true, paths: g.paths, hostPackage: best.key,
-          budgetBytes: 1 << 40);
+      moved = AssetGroup(
+        name: '${best.key}/boot',
+        boot: true,
+        paths: g.paths,
+        hostPackage: best.key,
+        budgetBytes: 1 << 40,
+      );
       where = best.key;
     }
   }
@@ -377,8 +426,11 @@ const kMainBootAssetDir = 'mp-assets-boot';
 
 /// [paths] 这些资源转成 base64 模块后的总字节数(与 [buildAssetBundle] 实际
 /// 产出一致,含模块头)。用来事先判断启动资源能不能并进主包/dart 分包。
-int estimateGroupBytes(Map<String, List<int>> assets, Iterable<String> paths,
-    {int packageBudgetBytes = kAssetPackageBudgetBytes}) {
+int estimateGroupBytes(
+  Map<String, List<int>> assets,
+  Iterable<String> paths, {
+  int packageBudgetBytes = kAssetPackageBudgetBytes,
+}) {
   final chunkChars = ((packageBudgetBytes - 1024) ~/ 4) * 4;
   var n = 0;
   for (final p in paths) {
@@ -396,7 +448,14 @@ class _Pending {
   final String b64;
   final String source;
   final int encoded;
-  _Pending(this.path, this.index, this.count, this.b64, this.source, this.encoded);
+  _Pending(
+    this.path,
+    this.index,
+    this.count,
+    this.b64,
+    this.source,
+    this.encoded,
+  );
 }
 
 List<_Pending> _encode(String p, List<int> bytes, int chunkChars) {
@@ -405,8 +464,10 @@ List<_Pending> _encode(String p, List<int> bytes, int chunkChars) {
   return [
     for (var i = 0; i < count; i++)
       () {
-        final part = b64.substring(i * chunkChars,
-            (i + 1) * chunkChars > b64.length ? b64.length : (i + 1) * chunkChars);
+        final part = b64.substring(
+          i * chunkChars,
+          (i + 1) * chunkChars > b64.length ? b64.length : (i + 1) * chunkChars,
+        );
         final source =
             '// [mp-flutter] asset: $p${count > 1 ? ' (分片 ${i + 1}/$count)' : ''}\n'
             '// 小程序代码包内的二进制文件无法用 FileSystemManager 读取,故 base64 内嵌。\n'

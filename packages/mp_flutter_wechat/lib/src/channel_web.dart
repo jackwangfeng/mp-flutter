@@ -40,7 +40,8 @@ class _WebChannel implements MpWechatChannel {
     final b = _bridge;
     if (b == null) {
       throw UnsupportedError(
-          'mp_flutter_wechat: $api 仅在 mp-flutter 编译的微信小程序中可用');
+        'mp_flutter_wechat: $api 仅在 mp-flutter 编译的微信小程序中可用',
+      );
     }
     try {
       return (await b.callApi(api.toJS, paramsJson.toJS).toDart).toDart;
@@ -61,7 +62,8 @@ class _WebChannel implements MpWechatChannel {
       if (e is JSObject) {
         final err = e as _BridgeError;
         if (err.mpErrMsg != null || err.mpApi != null) {
-          final msg = err.mpErrMsg?.toDart ?? err.message?.toDart ?? e.toString();
+          final msg =
+              err.mpErrMsg?.toDart ?? err.message?.toDart ?? e.toString();
           throw MpWechatException(
             api: err.mpApi?.toDart ?? api,
             errMsg: msg,

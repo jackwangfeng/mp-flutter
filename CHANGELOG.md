@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.3.2 — 2026-10-01
+
+### 冲 pub.dev 满分:三包 README 英文化、补 example、修分析提示
+
+- **三个包的 `packages/*/README.md` 改为英文为主**(安装/用法/配置/已知限制
+  全量英文内容),原中文内容原样移到同目录 `README.zh.md`,两边互相加一行
+  跳转链接。仓库根 README 不受影响,仍是中文(它不算在"包"范围内,pana 也
+  不检查它)。
+- **三个包各自新增 `example/`**(修复 pana "No example found" 0/10):
+  - `flutter_miniprogram`(CLI/构建期工具,不是库)用
+    `example/README.md`:pubspec dev_dependency 片段 + `dart run
+    flutter_miniprogram` + `mp_flutter.yaml` 示例,而不是可运行的 Dart 程序。
+  - `mp_flutter_wechat`/`mp_flutter_native` 各自新增 `example/lib/main.dart`
+    (`MpWechat`/`MpVideo`+`MpMap` 最小用法,均先判断
+    `isAvailable`/`mpNativeAvailable` 再调用)与 `example/pubspec.yaml`
+    (`path: ../` 依赖本包)。
+- `flutter_miniprogram` 静态分析 40/50 → 补齐:新增
+  `analysis_options.yaml`(`include: package:lints/core.yaml`,`lints` 已是
+  dev_dependency),修完 `dart analyze` 报出的全部问题,含
+  `lib/src/transform/canvaskit_js.dart:29` 的 "Angle brackets will be
+  interpreted as HTML" dartdoc 提示(把那段正则示例文字框进代码块)。随之
+  `dart format lib bin` 全量重排(当前 SDK 的新排版风格,纯格式改动,行为
+  不变)。
+- 文档覆盖率:给 `mp_flutter_wechat`(`MpPaymentParams`/`MpAddress`/
+  `MpScanResult`/`MpLocation` 各字段与构造函数)、`mp_flutter_native`
+  (`camera.dart`/`video.dart`/`map.dart` 的公开字段、构造函数、控制器方法)
+  补文档注释。
+- 三包版本号统一改为 0.3.2(`flutter_miniprogram` 的 `kPackageVersion` 常量
+  同步更新,有测试校验两者一致)。
+
 ## 0.3.1 — 2026-10-01
 
 ### E2E 驱动脚本随包发布

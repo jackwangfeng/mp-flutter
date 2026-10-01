@@ -22,12 +22,13 @@ class EsbuildNotInstalled implements Exception {
 }
 
 /// [Process.run] 的签名,供测试注入(断言命令行、不真的联网/落盘)。
-typedef ProcessRunner = Future<ProcessResult> Function(
-  String executable,
-  List<String> arguments, {
-  Map<String, String>? environment,
-  bool includeParentEnvironment,
-});
+typedef ProcessRunner =
+    Future<ProcessResult> Function(
+      String executable,
+      List<String> arguments, {
+      Map<String, String>? environment,
+      bool includeParentEnvironment,
+    });
 
 Future<ProcessResult> _defaultRunner(
   String executable,
@@ -35,8 +36,12 @@ Future<ProcessResult> _defaultRunner(
   Map<String, String>? environment,
   bool includeParentEnvironment = true,
 }) {
-  return Process.run(executable, arguments,
-      environment: environment, includeParentEnvironment: includeParentEnvironment);
+  return Process.run(
+    executable,
+    arguments,
+    environment: environment,
+    includeParentEnvironment: includeParentEnvironment,
+  );
 }
 
 /// 缓存目录 `~/.mp_flutter`(自动安装 esbuild 的落点)。
@@ -84,7 +89,7 @@ Future<String> resolveEsbuild({
       throw ToolchainMissing(
         'esbuild($override 不存在)',
         '显式指定的 esbuild 路径找不到对应文件。请检查 --esbuild 参数,或去掉它'
-        '让工具按默认顺序探测/自动安装。',
+            '让工具按默认顺序探测/自动安装。',
       );
     }
     return override;
@@ -97,7 +102,7 @@ Future<String> resolveEsbuild({
       throw ToolchainMissing(
         'esbuild(MP_FLUTTER_ESBUILD=$fromEnvVar 不存在)',
         '环境变量 MP_FLUTTER_ESBUILD 指定的路径找不到对应文件。请检查该路径,或'
-        '取消设置这个环境变量让工具按默认顺序探测/自动安装。',
+            '取消设置这个环境变量让工具按默认顺序探测/自动安装。',
       );
     }
     return fromEnvVar;
@@ -108,8 +113,12 @@ Future<String> resolveEsbuild({
   // 未捕获地往上抛。
   ProcessResult probe;
   try {
-    probe = await run(Platform.isWindows ? 'where' : 'which', ['esbuild'],
-        environment: env, includeParentEnvironment: !useCustomEnv);
+    probe = await run(
+      Platform.isWindows ? 'where' : 'which',
+      ['esbuild'],
+      environment: env,
+      includeParentEnvironment: !useCustomEnv,
+    );
   } on ProcessException {
     probe = ProcessResult(0, 1, '', '');
   }
@@ -130,8 +139,9 @@ Future<String> resolveEsbuild({
   // 全流程唯一允许联网的一步:先打印说明,离线环境的用户能立刻看懂接下来
   // 卡住/失败是在等网络,而不是一个无解释的挂起。
   stdout.writeln(
-      '[mp-flutter] 首次使用 esbuild($kEsbuildVersion 未安装),'
-      '正在执行 npm install --prefix $installDir esbuild@$kEsbuildVersion …');
+    '[mp-flutter] 首次使用 esbuild($kEsbuildVersion 未安装),'
+    '正在执行 npm install --prefix $installDir esbuild@$kEsbuildVersion …',
+  );
 
   try {
     Directory(installDir).createSync(recursive: true);
@@ -139,7 +149,7 @@ Future<String> resolveEsbuild({
     throw ToolchainMissing(
       'esbuild',
       '创建缓存目录失败($installDir):$e\n'
-      '请检查该路径的写权限,或用 --esbuild / MP_FLUTTER_ESBUILD 指定一个已装好的 esbuild。',
+          '请检查该路径的写权限,或用 --esbuild / MP_FLUTTER_ESBUILD 指定一个已装好的 esbuild。',
     );
   }
 
@@ -155,25 +165,25 @@ Future<String> resolveEsbuild({
     throw ToolchainMissing(
       'esbuild',
       '自动安装失败:找不到 npm 可执行文件($e)。\n'
-      '请手动安装 Node.js(附带 npm),或用 --esbuild / MP_FLUTTER_ESBUILD 指定一个'
-      '已装好的 esbuild 可执行文件路径。',
+          '请手动安装 Node.js(附带 npm),或用 --esbuild / MP_FLUTTER_ESBUILD 指定一个'
+          '已装好的 esbuild 可执行文件路径。',
     );
   }
   if (install.exitCode != 0) {
     throw ToolchainMissing(
       'esbuild',
       'npm install --prefix $installDir esbuild@$kEsbuildVersion 失败'
-      '(退出码 ${install.exitCode})。\n'
-      'stdout: ${install.stdout}\nstderr: ${install.stderr}\n'
-      '可能是离线环境——请联网后重试,或手动安装 esbuild 后用 --esbuild / '
-      'MP_FLUTTER_ESBUILD 指定路径。',
+          '(退出码 ${install.exitCode})。\n'
+          'stdout: ${install.stdout}\nstderr: ${install.stderr}\n'
+          '可能是离线环境——请联网后重试,或手动安装 esbuild 后用 --esbuild / '
+          'MP_FLUTTER_ESBUILD 指定路径。',
     );
   }
   if (!File(cachedBin).existsSync()) {
     throw ToolchainMissing(
       'esbuild',
       'npm install 报告成功,但 $cachedBin 仍不存在——esbuild 包的产物结构'
-      '可能变了,需要更新这里的探测路径。',
+          '可能变了,需要更新这里的探测路径。',
     );
   }
   return cachedBin;
@@ -200,9 +210,11 @@ Future<void> warnIfEsbuildVersionMismatch(
     if (r.exitCode != 0) return;
     final actual = (r.stdout as String).trim();
     if (actual.isNotEmpty && actual != kEsbuildVersion) {
-      warnFn('⚠️  esbuild 版本($actual)与已验证版本($kEsbuildVersion)不一致'
-          '(从 PATH 解析,未固定版本)。继续构建;如遇到语法降级相关的怪问题,'
-          '可用 --esbuild / MP_FLUTTER_ESBUILD 指定 $kEsbuildVersion 版本。');
+      warnFn(
+        '⚠️  esbuild 版本($actual)与已验证版本($kEsbuildVersion)不一致'
+        '(从 PATH 解析,未固定版本)。继续构建;如遇到语法降级相关的怪问题,'
+        '可用 --esbuild / MP_FLUTTER_ESBUILD 指定 $kEsbuildVersion 版本。',
+      );
     }
   } catch (_) {
     /* 探测失败不阻断构建,见上文档 */

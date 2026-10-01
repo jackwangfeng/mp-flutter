@@ -18,7 +18,7 @@ Future<String> resolveUnicodePropsTool({String? packageRoot}) async {
     throw ToolchainMissing(
       'unicode-props(js/unicode-props.js)',
       '构建期要把 main.dart.js 里正则的 Unicode 属性转义改写成码点区间,找不到改写工具:$tool\n'
-      'mp_flutter 包可能安装不完整或版本过旧,请重新执行 `dart pub get`(或 `flutter pub get`)。',
+          'mp_flutter 包可能安装不完整或版本过旧,请重新执行 `dart pub get`(或 `flutter pub get`)。',
     );
   }
   return tool;
@@ -48,7 +48,13 @@ Future<String> rewriteUnicodePropertyEscapes(
   try {
     final inFile = File(p.join(tmp.path, 'in.js'))..writeAsStringSync(source);
     final outFile = File(p.join(tmp.path, 'out.js'));
-    final r = await Process.run(nodeBin, [tool, '--in', inFile.path, '--out', outFile.path]);
+    final r = await Process.run(nodeBin, [
+      tool,
+      '--in',
+      inFile.path,
+      '--out',
+      outFile.path,
+    ]);
     if (r.exitCode != 0) {
       throw TransformFailure(
         '正则 Unicode 属性转义改写(安卓真机不支持 \\p{…})',
@@ -57,7 +63,10 @@ Future<String> rewriteUnicodePropertyEscapes(
       );
     }
     final info = jsonDecode('${r.stdout}'.trim()) as Map<String, dynamic>;
-    onRewritten?.call(info['rewrites'] as int, (info['properties'] as List).cast<String>());
+    onRewritten?.call(
+      info['rewrites'] as int,
+      (info['properties'] as List).cast<String>(),
+    );
     return outFile.readAsStringSync();
   } finally {
     await tmp.delete(recursive: true);

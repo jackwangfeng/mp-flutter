@@ -27,13 +27,17 @@ void checkBrotliAvailable() {
   try {
     r = Process.runSync('brotli', ['--version']);
   } on ProcessException catch (e) {
-    throw ToolchainMissing('brotli',
-        '找不到 brotli 可执行文件($e)。canvaskit.wasm 压缩依赖它。\n'
-        '安装:macOS `brew install brotli`;Debian/Ubuntu `apt install brotli`。');
+    throw ToolchainMissing(
+      'brotli',
+      '找不到 brotli 可执行文件($e)。canvaskit.wasm 压缩依赖它。\n'
+          '安装:macOS `brew install brotli`;Debian/Ubuntu `apt install brotli`。',
+    );
   }
   if (r.exitCode != 0) {
-    throw ToolchainMissing('brotli',
-        'brotli --version 返回非零退出码(${r.exitCode}):${r.stderr}\n'
-        '安装:macOS `brew install brotli`;Debian/Ubuntu `apt install brotli`。');
+    throw ToolchainMissing(
+      'brotli',
+      'brotli --version 返回非零退出码(${r.exitCode}):${r.stderr}\n'
+          '安装:macOS `brew install brotli`;Debian/Ubuntu `apt install brotli`。',
+    );
   }
 }

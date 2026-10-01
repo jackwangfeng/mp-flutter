@@ -13,7 +13,8 @@ const kLoaderManifestPath = 'mp-manifest.js';
 /// `require.async` 该包里的某个 JS——pkg-wasm 里只有 .wasm.br 没有 JS,
 /// 所以给每个分包放一个空模块专门用来触发下载。
 const kReadyModule = 'mp-ready.js';
-const kReadyModuleSource = '// [mp-flutter] 分包就位探针:require.async 它即可触发本分包下载。\nmodule.exports = true;\n';
+const kReadyModuleSource =
+    '// [mp-flutter] 分包就位探针:require.async 它即可触发本分包下载。\nmodule.exports = true;\n';
 
 /// 生成主包里的加载表 `mp-manifest.js`。
 ///
@@ -69,7 +70,9 @@ String buildLoaderManifest({
     ..writeln('// 主包不能同步 require 分包 JS,跨包加载一律走 require.async,且路径必须是字面量。')
     ..writeln('function dartChunkFailed(label) {')
     ..writeln('  return function (e) {')
-    ..writeln('    throw new Error(label + "加载/执行失败: " + ((e && (e.message || e.errMsg)) || e));')
+    ..writeln(
+      '    throw new Error(label + "加载/执行失败: " + ((e && (e.message || e.errMsg)) || e));',
+    )
     ..writeln('  };')
     ..writeln('}')
     // 按需分包单飞:同一个未下载的分包同一时刻只发一次 require.async。
@@ -82,19 +85,27 @@ String buildLoaderManifest({
     ..writeln('var pkgGate = {};')
     ..writeln('function inPkg(roots, load) {')
     ..writeln('  var waits = [];')
-    ..writeln('  for (var i = 0; i < roots.length; i++) if (pkgGate[roots[i]]) waits.push(pkgGate[roots[i]]);')
+    ..writeln(
+      '  for (var i = 0; i < roots.length; i++) if (pkgGate[roots[i]]) waits.push(pkgGate[roots[i]]);',
+    )
     ..writeln('  var p = Promise.all(waits).then(load);')
     ..writeln('  var gate = p.then(function () {}, function () {});')
     ..writeln('  var mine = [];')
-    ..writeln('  for (var j = 0; j < roots.length; j++) if (!pkgGate[roots[j]]) { pkgGate[roots[j]] = gate; mine.push(roots[j]); }')
-    ..writeln('  p.catch(function () { mine.forEach(function (r) { if (pkgGate[r] === gate) delete pkgGate[r]; }); });')
+    ..writeln(
+      '  for (var j = 0; j < roots.length; j++) if (!pkgGate[roots[j]]) { pkgGate[roots[j]] = gate; mine.push(roots[j]); }',
+    )
+    ..writeln(
+      '  p.catch(function () { mine.forEach(function (r) { if (pkgGate[r] === gate) delete pkgGate[r]; }); });',
+    )
     ..writeln('  return p;')
     ..writeln('}')
     ..writeln('module.exports = {')
     ..writeln('  subPackages: {');
   for (final root in subPackages) {
-    b.writeln('    ${jsonEncode(root)}: '
-        'function () { return require.async(${_lit('$root/$kReadyModule')}); },');
+    b.writeln(
+      '    ${jsonEncode(root)}: '
+      'function () { return require.async(${_lit('$root/$kReadyModule')}); },',
+    );
   }
   b.writeln('  },');
   if (wasmSubPackage != null) {
@@ -112,6 +123,7 @@ String buildLoaderManifest({
     final label = jsonEncode('main.dart.js 分片 ${i + 1}/$n(./$path)');
     return 'require.async(${_lit(path)}).catch(dartChunkFailed($label))';
   }
+
   final chain = StringBuffer(load(0));
   for (var i = 1; i < n; i++) {
     chain.write('.then(function () { return ${load(i)}; })');
@@ -126,15 +138,19 @@ String buildLoaderManifest({
   final bootRoots = subPackages.toSet();
   byAsset.forEach((path, chunks) {
     chunks.sort((a, b) => a.chunkIndex.compareTo(b.chunkIndex));
-    final loads = chunks.map((c) => 'require.async(${_lit(c.modulePath)})').join(', ');
+    final loads = chunks
+        .map((c) => 'require.async(${_lit(c.modulePath)})')
+        .join(', ');
     final lazy = {
       for (final c in chunks)
-        if (!bootRoots.contains(c.package) && c.package != 'main') c.package
+        if (!bootRoots.contains(c.package) && c.package != 'main') c.package,
     }.toList()..sort();
     final body = 'Promise.all([$loads])';
-    b.writeln(lazy.isEmpty
-        ? '    ${jsonEncode(path)}: function () { return $body; },'
-        : '    ${jsonEncode(path)}: function () { return inPkg(${jsonEncode(lazy)}, function () { return $body; }); },');
+    b.writeln(
+      lazy.isEmpty
+          ? '    ${jsonEncode(path)}: function () { return $body; },'
+          : '    ${jsonEncode(path)}: function () { return inPkg(${jsonEncode(lazy)}, function () { return $body; }); },',
+    );
   });
   b.writeln('  },');
   void font(String name, ({String asset, String package, String file}) f) {
@@ -143,7 +159,9 @@ String buildLoaderManifest({
       ..writeln('    key: ${jsonEncode(f.asset)},')
       ..writeln('    family: ${jsonEncode(kCjkFontFamily)},')
       ..writeln('    file: ${jsonEncode('/${f.package}/${f.file}')},')
-      ..writeln('    load: function () { return require.async(${_lit('${f.package}/$kReadyModule')}); },')
+      ..writeln(
+        '    load: function () { return require.async(${_lit('${f.package}/$kReadyModule')}); },',
+      )
       ..writeln('  },');
   }
 

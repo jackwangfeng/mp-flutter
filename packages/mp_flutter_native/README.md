@@ -1,27 +1,25 @@
 # mp_flutter_native
 
-在 [mp-flutter](../mp_flutter) 编译的微信小程序里,把 `MpVideo`/`MpMap`/`MpCamera`
-接到原生 `<video>`/`<map>`/`<camera>` 组件(Task 2 的 JS 同步层
-`self.__mpNative`,见 `packages/mp_flutter/runtime/native-views.js`);在其它平台
-(Android/iOS/桌面)或普通浏览器上渲染各自的 `fallback`,控制器方法明确抛
-`UnsupportedError`,而不是静默失败。
+Wires `MpVideo`/`MpMap`/`MpCamera` to native `<video>`/`<map>`/`<camera>`
+components inside a WeChat Mini Program compiled by
+[mp-flutter](../mp_flutter) (`flutter_miniprogram` on pub.dev) — via its JS
+sync layer `self.__mpNative` (see
+`packages/mp_flutter/runtime/native-views.js`). On other platforms
+(Android/iOS/desktop) or in a plain browser, each widget renders its own
+`fallback`, and controller methods throw a clear `UnsupportedError` instead
+of failing silently.
 
-## 引入方式
+中文版见 [README.zh.md](README.zh.md).
 
-尚未发布到 pub.dev。用 git 依赖引入本仓库(公开仓库,无需额外凭证;`ref`
-建议固定到一个发布 tag,例如 `v0.2.1`,而不是 `main`):
+## Install
 
 ```yaml
 dependencies:
-  mp_flutter_native:
-    git:
-      url: https://github.com/jackwangfeng/mp-flutter.git
-      path: packages/mp_flutter_native
-      ref: v0.2.1
+  mp_flutter_native: ^0.3.2
 ```
 
-在 mp-flutter 仓库内部开发(monorepo 内的 `example/` 等)时,用相对路径的
-path 依赖即可,不需要走 git:
+When developing inside the mp-flutter monorepo itself (e.g. the top-level
+`example/` app), use a relative path dependency instead:
 
 ```yaml
 dependencies:
@@ -29,12 +27,16 @@ dependencies:
     path: ../mp_flutter/packages/mp_flutter_native
 ```
 
+See [`example/lib/main.dart`](example/lib/main.dart) in this package for a
+minimal, runnable usage example (`MpVideo` + `MpMap` with an availability
+check).
+
 ## API
 
 ```dart
 MpVideo(
   src: 'https://example.com/a.mp4',
-  autoplay: true,          // 优先用这个,而不是创建后立刻调用 controller.play()
+  autoplay: true,          // Prefer this over calling controller.play() right after creation
   loop: false,
   muted: false,
   controls: true,
@@ -43,47 +45,48 @@ MpVideo(
   controller: myVideoController,
   onPlay: () {}, onPause: () {}, onEnded: () {},
   onTimeUpdate: (seconds) {}, onError: (msg) {},
-  fallback: const Text('当前平台不支持视频'),
+  fallback: const Text('Video is not supported on this platform'),
 )
 
 MpMap(
   latitude: 31.2, longitude: 121.5, scale: 16,
-  markers: [MpMapMarker(id: 1, latitude: 31.2, longitude: 121.5, title: '这里')],
+  markers: [MpMapMarker(id: 1, latitude: 31.2, longitude: 121.5, title: 'Here')],
   showLocation: true,
   controller: myMapController,
   onTap: (lat, lng) {}, onMarkerTap: (id) {},
-  // 微信 bindregionchange 的 e.type 本身就是 'begin'/'end'(视野变化的
-  // 开始/结束),这里原样转发,不吞成一个笼统的 'regionchange'。
+  // WeChat's bindregionchange event's `e.type` is already 'begin'/'end'
+  // (the start/end of a viewport change); this is forwarded as-is rather
+  // than collapsed into one generic 'regionchange'.
   onRegionChange: (type) {}, // type: 'begin' | 'end'
-  fallback: const Text('当前平台不支持地图'),
+  fallback: const Text('Map is not supported on this platform'),
 )
 
 MpCamera(
   devicePosition: 'back', flash: 'auto',
   controller: myCameraController,
   onError: (msg) {},
-  fallback: const Text('当前平台不支持相机'),
+  fallback: const Text('Camera is not supported on this platform'),
 )
 
-bool get mpNativeAvailable; // 仅在 mp-flutter 编译的小程序里为 true
+bool get mpNativeAvailable; // true only inside a Mini Program compiled by mp-flutter
 ```
 
-控制器:
+Controllers:
 
-- `MpVideoController`:`play()`/`pause()`/`seek(seconds)`/`stop()`/
+- `MpVideoController`: `play()`/`pause()`/`seek(seconds)`/`stop()`/
   `requestFullScreen()`/`exitFullScreen()`
-- `MpMapController`:`moveToLocation()`/`getCenterLocation()`(返回
+- `MpMapController`: `moveToLocation()`/`getCenterLocation()` (returns
   `({double latitude, double longitude})`)
-- `MpCameraController`:`takePhoto({quality})`(返回 `tempImagePath`)
+- `MpCameraController`: `takePhoto({quality})` (returns `tempImagePath`)
 
-## 非小程序平台 / 没有原生环境时的行为
+## Behavior outside a Mini Program, or before the native view exists
 
-先判断 `mpNativeAvailable` 再决定是否展示相关入口,避免调用控制器方法抛出
-`UnsupportedError`:
+Check `mpNativeAvailable` before deciding whether to show related UI, so you
+never call a controller method that throws `UnsupportedError`:
 
-- 三个 widget 都渲染 `fallback ?? const SizedBox.shrink()`。
-- 控制器任意方法调用都抛
-  `UnsupportedError('mp_flutter_native: 该操作仅在 mp-flutter 编译的小程序中、且对应的原生组件已创建后可用')`。
+- All three widgets render `fallback ?? const SizedBox.shrink()`.
+- Any controller method call throws
+  `UnsupportedError('mp_flutter_native: this operation is only available inside a Mini Program compiled by mp-flutter, after the matching native component has been created')`.
 
 ```dart
 if (mpNativeAvailable) {
@@ -91,33 +94,54 @@ if (mpNativeAvailable) {
 }
 ```
 
-## ★ 层级警告:原生组件总是叠在 Flutter 内容之上
+## Limitations
 
-小程序把原生组件作为原生视图,与 WXML 伴生层同层叠加合成,**不受 Flutter
-绘制顺序影响**。如果在 Flutter 树里把别的内容(弹层背景、装饰、取景框 UI 等)
-盖在 `MpVideo`/`MpMap`/`MpCamera` 上面,实际效果是那部分内容被原生组件遮住,
-而不是相反。需要在原生组件之上叠加 UI 时,考虑改用小程序自己的
-`cover-view`/`cover-image`(不在本包范围内),或者把交互 UI 放在原生组件区域
-之外。
+- `mpNativeAvailable` is only `true` inside a Mini Program compiled by
+  mp-flutter; on every other platform (Android/iOS/desktop, or a plain
+  browser) the three widgets fall back to `fallback` and controllers throw.
+- A controller is only usable after its matching widget has actually been
+  built in a Mini Program environment — calling it beforehand (or after the
+  widget is disposed) throws `UnsupportedError`, it does not queue the call.
+- See "Native components are always layered above Flutter content" below —
+  this is a hard WeChat Mini Program platform constraint, not something this
+  package can work around.
 
-## 实现说明
+## ★ Layering warning: native components always sit above Flutter content
 
-- Web 平台(`lib/src/registry_web.dart`):首次使用某个 `MpNativeKind` 时用
-  `ui_web.platformViewRegistry.registerViewFactory` 注册一个 `mp-native-<kind>`
-  view type,工厂函数造 `<div data-mp-native data-mp-params data-mp-id>`——
-  `data-mp-id` 就是 Flutter 引擎分配的平台视图 `viewId`(不另起计数器)。
-  参数变化通过直接改写 `data-mp-params` 属性同步(`HtmlElementView` 的
-  `creationParams` 只在创建那一刻生效,不会跟着 widget 重建自动更新);
-  原生事件监听占位 div 上的 `CustomEvent('mpnative')`,`detail` 是 JSON 字符串
-  `{type, detail}`;控制器命令经 `self.__mpNative.command(id, method, argsJson)`
-  转发。
-- `self.__mpNative` 可能在工厂函数执行的那一刻还不存在(`boot()` 对首帧的
-  调度是异步的,真机实测过这个时序缝隙)——按 Task 2 的约定,有就
-  `register(id)`,没有就把 id push 进 `self.__mpNativePending`(自动创建);
-  对应视图 dispose 时调 `unregister(id)`(必须调用,否则同步层的扫描循环会
-  一直跑下去)。
-- 非 Web 平台(`lib/src/registry_stub.dart`):`mpNativeAvailable` 恒为
-  `false`,控制器方法恒抛 `UnsupportedError`。
-- `dart.library.js_interop` 条件导入在 stub/web 两份实现之间切换,镜像
-  [`mp_flutter_wechat`](../mp_flutter_wechat) 的 `channel_stub.dart`/
-  `channel_web.dart` 写法。`flutter test` 默认跑在 VM 上,恒定选中 stub。
+The Mini Program renders these as native views, composited on top of the
+WXML companion layer — **independent of Flutter's own paint order**. If you
+place other Flutter content (a dialog's backdrop, decorations, a
+viewfinder overlay, etc.) "above" `MpVideo`/`MpMap`/`MpCamera` in the widget
+tree, in practice that content gets covered by the native component, not the
+other way around. If you need UI layered on top of a native component,
+consider the Mini Program's own `cover-view`/`cover-image` (outside the
+scope of this package), or keep interactive UI outside the native
+component's area.
+
+## Implementation notes
+
+- On Web (`lib/src/registry_web.dart`): the first time an `MpNativeKind` is
+  used, `ui_web.platformViewRegistry.registerViewFactory` registers an
+  `mp-native-<kind>` view type whose factory creates a
+  `<div data-mp-native data-mp-params data-mp-id>` — `data-mp-id` is simply
+  the platform view `viewId` the Flutter engine assigns (no separate
+  counter). Parameter changes are synced by rewriting the `data-mp-params`
+  attribute directly (`HtmlElementView`'s `creationParams` only takes effect
+  at creation time and does not follow widget rebuilds); native events are
+  listened for via a `CustomEvent('mpnative')` on the placeholder div, whose
+  `detail` is the JSON string `{type, detail}`; controller commands are
+  forwarded through `self.__mpNative.command(id, method, argsJson)`.
+- `self.__mpNative` may not exist yet at the moment the factory function
+  runs (`boot()`'s scheduling for the first frame is asynchronous — this
+  timing gap has been observed on real devices): per the Task 2 contract, if
+  it exists, call `register(id)`; if not, push the id onto
+  `self.__mpNativePending` (auto-created). On disposal of the corresponding
+  view, `unregister(id)` must be called, or the sync layer's scan loop keeps
+  running indefinitely.
+- On non-Web platforms (`lib/src/registry_stub.dart`): `mpNativeAvailable` is
+  always `false`, and controller methods always throw `UnsupportedError`.
+- A `dart.library.js_interop` conditional import switches between the
+  stub/web implementations, mirroring
+  [`mp_flutter_wechat`](../mp_flutter_wechat)'s `channel_stub.dart`/
+  `channel_web.dart` pattern. `flutter test` runs on the VM by default, so it
+  always selects the stub.

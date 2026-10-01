@@ -26,8 +26,10 @@ class TransformFailure implements Exception {
 /// emscripten 的 Safari WebGL2 workaround。
 ///
 /// 用结构化正则匹配,不绑死 minify 后的变量名:
-///   <obj>.<flag>||(<obj>.<flag>=<obj>.getContext,<obj>.getContext=function(..){..
-///   instanceof WebGLRenderingContext..});
+/// ```
+/// <obj>.<flag>||(<obj>.<flag>=<obj>.getContext,<obj>.getContext=function(..){..
+/// instanceof WebGLRenderingContext..});
+/// ```
 final _safariWorkaround = RegExp(
   r'(\w+)\.(\w+)\|\|\(\1\.\2=\1\.getContext,\1\.getContext=function\([^)]*\)\{'
   r'[^{}]*instanceof WebGLRenderingContext[^{}]*\}\);',
@@ -39,7 +41,10 @@ String transformCanvasKitJs(String source) {
 
   // ① ESM → CJS。小程序不支持 import.meta,且它是语法错误(不是运行时错误),
   //    即使那段分支永不执行也必须消掉。
-  out = out.replaceAll('var _scriptName = import.meta.url;', 'var _scriptName = "";');
+  out = out.replaceAll(
+    'var _scriptName = import.meta.url;',
+    'var _scriptName = "";',
+  );
   out = out.replaceAll(
     RegExp(r'\(new URL\("canvaskit\.wasm",\s*import\.meta\.url\)\)\.href'),
     '"canvaskit.wasm"',
@@ -51,8 +56,10 @@ String transformCanvasKitJs(String source) {
     );
   }
 
-  out = out.replaceFirst(RegExp(r'export default CanvasKitInit;\s*$'),
-      'module.exports = CanvasKitInit;\n');
+  out = out.replaceFirst(
+    RegExp(r'export default CanvasKitInit;\s*$'),
+    'module.exports = CanvasKitInit;\n',
+  );
   if (!out.contains('module.exports = CanvasKitInit;')) {
     throw const TransformFailure(
       'export default → module.exports 失败',
@@ -76,8 +83,8 @@ String transformCanvasKitJs(String source) {
       throw const TransformFailure(
         'Safari WebGL2 workaround 结构不匹配',
         '仍存在 `instanceof WebGLRenderingContext`,但包装函数结构已变。'
-        '不摘掉它,模拟器里 GL 句柄恒为 0(跨 realm instanceof 恒 false),'
-        '真机 iOS 上更严重,会因为全局没有 WebGLRenderingContext 而 ReferenceError。',
+            '不摘掉它,模拟器里 GL 句柄恒为 0(跨 realm instanceof 恒 false),'
+            '真机 iOS 上更严重,会因为全局没有 WebGLRenderingContext 而 ReferenceError。',
       );
     }
     out = out.replaceFirstMapped(
@@ -115,8 +122,9 @@ Future<String> downgradeToEs2017(
   String source, {
   String esbuildPath = 'esbuild',
 }) async {
-  final tempDir =
-      await Directory.systemTemp.createTemp('mp_flutter_canvaskit_esbuild_');
+  final tempDir = await Directory.systemTemp.createTemp(
+    'mp_flutter_canvaskit_esbuild_',
+  );
   try {
     final inFile = File('${tempDir.path}/in.js');
     final outFile = File('${tempDir.path}/out.js');
@@ -135,11 +143,11 @@ Future<String> downgradeToEs2017(
       throw ToolchainMissing(
         'esbuild(esbuildPath="$esbuildPath")',
         '找不到 esbuild 可执行文件($e)。\n'
-        '不做语法降级,微信上传校验器会因为 `||=`/`&&=`/`??=`/`?.`/`??` 等 '
-        'ES2021+ 写法直接拒绝这个文件(报错形如 `SyntaxError: Unexpected '
-        'token =`)。\n'
-        '安装方式:`npm install -g esbuild`,或在项目里 `npm install esbuild` '
-        '后把 node_modules/.bin/esbuild 的绝对路径传给 esbuildPath 参数。',
+            '不做语法降级,微信上传校验器会因为 `||=`/`&&=`/`??=`/`?.`/`??` 等 '
+            'ES2021+ 写法直接拒绝这个文件(报错形如 `SyntaxError: Unexpected '
+            'token =`)。\n'
+            '安装方式:`npm install -g esbuild`,或在项目里 `npm install esbuild` '
+            '后把 node_modules/.bin/esbuild 的绝对路径传给 esbuildPath 参数。',
       );
     }
 
@@ -157,12 +165,12 @@ Future<String> downgradeToEs2017(
         throw TransformFailure(
           '语法降级后仍残留 "$token"',
           'esbuild --target=es2017 应当已消除该写法;若仍出现,说明 esbuild '
-          '版本、参数或输入有问题。微信上传校验器会因为残留的 $token 拒绝'
-          '这个文件,报错通常是一个和这里毫无关系的行号。'
-          '\n'
-          '已知局限(针对 `?.` 检查):此检查是朴素的子串匹配,在 minify 后的代码里'
-          '可能误报,例如三元表达式 `c ? .5 : 1` 被识别为 `c?.5`。'
-          '这是安全失败(误报会抛出异常,不会产出坏文件);如遇到,请确认输出内容。',
+              '版本、参数或输入有问题。微信上传校验器会因为残留的 $token 拒绝'
+              '这个文件,报错通常是一个和这里毫无关系的行号。'
+              '\n'
+              '已知局限(针对 `?.` 检查):此检查是朴素的子串匹配,在 minify 后的代码里'
+              '可能误报,例如三元表达式 `c ? .5 : 1` 被识别为 `c?.5`。'
+              '这是安全失败(误报会抛出异常,不会产出坏文件);如遇到,请确认输出内容。',
         );
       }
     }
@@ -171,7 +179,7 @@ Future<String> downgradeToEs2017(
       throw const TransformFailure(
         '语法降级破坏了 module.exports',
         'esbuild 的 --format=cjs 不应该改变已有的 CommonJS 导出,但降级后 '
-        'module.exports 不见了,需要检查 esbuild 版本或参数变化。',
+            'module.exports 不见了,需要检查 esbuild 版本或参数变化。',
       );
     }
 
@@ -179,7 +187,7 @@ Future<String> downgradeToEs2017(
       throw const TransformFailure(
         '语法降级后 Safari workaround 复现',
         '不应该发生——说明降级步骤跑在了摘 workaround 之前,或者输入本身'
-        '没有先摘掉 workaround。降级必须在 transformCanvasKitJs 之后执行。',
+            '没有先摘掉 workaround。降级必须在 transformCanvasKitJs 之后执行。',
       );
     }
 

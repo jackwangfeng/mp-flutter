@@ -34,16 +34,19 @@ String patchFontFallback(String source, {required String family}) {
     throw TransformFailure(
       '回退字体补丁 A(globalFontFallbacks 初值 ["Roboto"])',
       '在 navigator.language 附近期望恰好 1 处 ["Roboto"],实际 ${aMatches.length} 处。'
-      '引擎 FontFallbackManager 的字段初始化可能变了(font_fallbacks.dart)。'
-      '可设 cjk_font: false 临时关闭常用汉字合一字体。',
+          '引擎 FontFallbackManager 的字段初始化可能变了(font_fallbacks.dart)。'
+          '可设 cjk_font: false 临时关闭常用汉字合一字体。',
       file: 'main.dart.js',
     );
   }
   final am = aMatches.single;
   final aText = am.group(0)!;
   final robotoAt = aText.lastIndexOf('"Roboto"');
-  out = out.replaceRange(am.start + robotoAt, am.start + robotoAt + '"Roboto"'.length,
-      '"Roboto",$famJs');
+  out = out.replaceRange(
+    am.start + robotoAt,
+    am.start + robotoAt + '"Roboto"'.length,
+    '"Roboto",$famJs',
+  );
 
   // ── 补丁 B:缺字检测 ──
   //   if (!(rune < 160 || known.contains(rune) || noFont.contains(rune))) runesToCheck.add(rune)
@@ -60,9 +63,9 @@ String patchFontFallback(String source, {required String family}) {
     throw TransformFailure(
       '回退字体补丁 B(ensureFontsSupportText 缺字检测)',
       '期望恰好 1 处 "rune < 160 ... getMissingCodePoints(codePoints, fontFamilies).length !== 0'
-      ' → addMissingCodePoints(codePoints)",实际 ${bMatches.length} 处。'
-      '引擎 font_fallbacks.dart 的 ensureFontsSupportText 可能变了。'
-      '可设 cjk_font: false 临时关闭常用汉字合一字体。',
+          ' → addMissingCodePoints(codePoints)",实际 ${bMatches.length} 处。'
+          '引擎 font_fallbacks.dart 的 ensureFontsSupportText 可能变了。'
+          '可设 cjk_font: false 临时关闭常用汉字合一字体。',
       file: 'main.dart.js',
     );
   }
@@ -71,7 +74,8 @@ String patchFontFallback(String source, {required String family}) {
   // 别处,且保留 dart2js 挂在数组上的类型信息($ti)——concat/slice 出来的新数组
   // 没有它,--profile 产物里 `List<String>._as` 类型检查会失败。
   final fams = bm.group(5)!;
-  final replacement = '${bm.group(1)}'
+  final replacement =
+      '${bm.group(1)}'
       '{if($fams.indexOf($famJs)<0)$fams.push($famJs);'
       'var __mpMiss=${bm.group(2)}.${bm.group(3)}(${bm.group(4)},$fams);'
       'if(__mpMiss.length!==0)${bm.group(6)}.${bm.group(7)}(__mpMiss)}';

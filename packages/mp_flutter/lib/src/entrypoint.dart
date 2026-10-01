@@ -25,9 +25,13 @@ class EntrypointSkipped implements Exception {
 /// 过,通常是绝对路径;这里两种都接受,方便单测直接传相对路径)。
 ///
 /// 前提:`pubspec.yaml` 有 `name`,且该文件存在。不满足时抛 [EntrypointSkipped]。
-String writeEntrypoint(String projectPath, {String targetRelPath = 'lib/main.dart'}) {
-  final targetAbs =
-      p.isAbsolute(targetRelPath) ? targetRelPath : p.join(projectPath, targetRelPath);
+String writeEntrypoint(
+  String projectPath, {
+  String targetRelPath = 'lib/main.dart',
+}) {
+  final targetAbs = p.isAbsolute(targetRelPath)
+      ? targetRelPath
+      : p.join(projectPath, targetRelPath);
   final pubspec = File(p.join(projectPath, 'pubspec.yaml'));
   if (!File(targetAbs).existsSync()) {
     throw EntrypointSkipped('工程没有 ${p.relative(targetAbs, from: projectPath)}');
@@ -36,7 +40,9 @@ String writeEntrypoint(String projectPath, {String targetRelPath = 'lib/main.dar
   try {
     final doc = loadYaml(pubspec.readAsStringSync());
     if (doc is YamlMap && doc['name'] is String) name = doc['name'] as String;
-  } catch (_) {/* 落到下面的 null 判断 */}
+  } catch (_) {
+    /* 落到下面的 null 判断 */
+  }
   if (name == null || !RegExp(r'^[a-zA-Z_][a-zA-Z0-9_]*$').hasMatch(name)) {
     throw EntrypointSkipped('pubspec.yaml 里没有合法的 name(实际:$name)');
   }
@@ -55,10 +61,17 @@ String writeEntrypoint(String projectPath, {String targetRelPath = 'lib/main.dar
 /// 工程根的脚本或另一个顶层目录),`package:` 机制覆盖不到,退回相对入口
 /// 包装自身所在目录(`.dart_tool/flutter_miniprogram/`)的相对 import——两种形式都
 /// 必须能被 dart2js 正确解析,见 `entrypoint_test.dart`。
-String entrypointImportFor(String projectPath, String packageName, String targetAbs) {
+String entrypointImportFor(
+  String projectPath,
+  String packageName,
+  String targetAbs,
+) {
   final relFromRoot = p.normalize(p.relative(targetAbs, from: projectPath));
   final segments = p.split(relFromRoot);
-  final insideLib = segments.isNotEmpty && segments.first == 'lib' && !relFromRoot.startsWith('..');
+  final insideLib =
+      segments.isNotEmpty &&
+      segments.first == 'lib' &&
+      !relFromRoot.startsWith('..');
   if (insideLib) {
     final withinLib = p.joinAll(segments.skip(1));
     return 'package:$packageName/$withinLib';
@@ -99,7 +112,8 @@ String entrypointImportFor(String projectPath, String packageName, String target
 /// [targetImport] 是入口文件的 import URI(`package:` 形式或相对入口包装自身
 /// 的相对 import,见 [entrypointImportFor]);缺省(仅供单测直接调用本函数时
 /// 使用)按旧行为拼 `package:$packageName/main.dart`。
-String buildEntrypointSource(String packageName, {String? targetImport}) => '''
+String buildEntrypointSource(String packageName, {String? targetImport}) =>
+    '''
 // 由 flutter_miniprogram 生成,勿手改。见 flutter_miniprogram/lib/src/entrypoint.dart。
 // ignore_for_file: type=lint
 import 'dart:js_interop';

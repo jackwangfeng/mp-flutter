@@ -87,12 +87,20 @@ List<String> preloadOrder(
       return const [];
     case 'wasm':
       return [
-        wasmPackage, ...bootAssetPackages, if (cjkPackage != null) cjkPackage, ...dartPackages,
+        wasmPackage,
+        ...bootAssetPackages,
+        if (cjkPackage != null) cjkPackage,
+        ...dartPackages,
         if (cjkBoldPackage != null) cjkBoldPackage,
       ];
     case 'auto':
     case 'dart':
-      return [...dartPackages, ...bootAssetPackages, wasmPackage, if (cjkPackage != null) cjkPackage];
+      return [
+        ...dartPackages,
+        ...bootAssetPackages,
+        wasmPackage,
+        if (cjkPackage != null) cjkPackage,
+      ];
     default:
       throw ArgumentError.value(mode, 'mode', '只能是 auto / dart / wasm / none');
   }
@@ -129,7 +137,8 @@ String _xmlEscape(String s) => s
 
 /// 原生启动界面(首帧提交前显示,见 pipeline.dart `buildHostPageJs` 的
 /// `mpBootStage`):应用名 + 细进度条;启动失败时进度条换成错误文案。
-String _splashWxml(String title) => '''
+String _splashWxml(String title) =>
+    '''
 <view wx:if="{{mpSplash.visible}}" class="mp-splash">
   <text class="mp-splash-title">${_xmlEscape(title)}</text>
   <view wx:if="{{!mpSplash.error}}" class="mp-splash-track"><view class="mp-splash-bar" style="width:{{mpSplash.progress}}%"></view></view>
@@ -139,7 +148,9 @@ String _splashWxml(String title) => '''
 
 String _splashWxss(String bg) {
   final fg = splashForeground(bg);
-  final track = fg == '#333333' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.2)';
+  final track = fg == '#333333'
+      ? 'rgba(0, 0, 0, 0.12)'
+      : 'rgba(255, 255, 255, 0.2)';
   return '''
 /* 原生启动界面:盖在(还是黑的)画布上,首帧提交后移除 */
 .mp-splash { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 50; background: $bg;
@@ -206,14 +217,18 @@ ProjectFiles emitProject({
   if (requireLocation && !resolvedPrivateInfos.contains('getLocation')) {
     resolvedPrivateInfos.add('getLocation');
   }
-  final needsLocationScope =
-      resolvedPrivateInfos.any(kLocationScopePrivateInfos.contains);
+  final needsLocationScope = resolvedPrivateInfos.any(
+    kLocationScopePrivateInfos.contains,
+  );
 
   final appJson = enc.convert({
     'pages': [entryPagePath],
     'subPackages': [
       for (final root in subPackageRoots)
-        {'root': root, 'pages': [kPlaceholderPage]},
+        {
+          'root': root,
+          'pages': [kPlaceholderPage],
+        },
     ],
     if (preload.isNotEmpty)
       'preloadRule': {
@@ -269,7 +284,8 @@ ProjectFiles emitProject({
   });
 
   // 承载页:整屏一块 WebGL 画布。
-  final wxml = '''
+  final wxml =
+      '''
 <canvas type="webgl" id="flutter-canvas" class="flutter-canvas" disable-scroll="true"
         bindtouchstart="onMpTouch" bindtouchmove="onMpTouch"
         bindtouchend="onMpTouch" bindtouchcancel="onMpTouch"></canvas>
@@ -355,7 +371,8 @@ page { width: 100%; height: 100%; background: #000; }
 ${perfHud ? _perfHudOverlayWxss : ''}${_splashWxss(splashBg)}''';
 
   // 未捕获错误必须可见。静默失败在小程序里的表现就是一块黑画布,极难倒查。
-  final appJs = '''
+  final appJs =
+      '''
 App({
 ${perfHud ? _perfHudOnLaunch : ''}  onError(msg) { console.error('[mp-flutter] uncaught: ' + msg); },
   onUnhandledRejection(res) {
@@ -373,7 +390,9 @@ ${perfHud ? _perfHudOnLaunch : ''}  onError(msg) { console.error('[mp-flutter] u
     'app.wxss': 'page { margin: 0; padding: 0; }\n',
     'project.config.json': projectConfig,
     'sitemap.json': enc.convert({
-      'rules': [{'action': 'allow', 'page': '*'}],
+      'rules': [
+        {'action': 'allow', 'page': '*'},
+      ],
     }),
     '$entryPagePath.wxml': wxml,
     '$entryPagePath.wxss': wxss,

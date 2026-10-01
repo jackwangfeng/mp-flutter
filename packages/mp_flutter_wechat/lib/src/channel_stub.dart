@@ -9,7 +9,8 @@ class _StubChannel implements MpWechatChannel {
 
   @override
   Future<String> call(String api, String paramsJson) => throw UnsupportedError(
-      'mp_flutter_wechat: $api 仅在 mp-flutter 编译的微信小程序中可用');
+    'mp_flutter_wechat: $api 仅在 mp-flutter 编译的微信小程序中可用',
+  );
 
   @override
   void setShareInfo(String json) {}

@@ -22,7 +22,8 @@ const kCjkFontFamily = 'MpNotoSansSC';
 
 /// 两档字表的包内源文件(相对 mp_flutter 包根)。
 const kCjkFontSources = {
-  'level1': 'fonts/NotoSansSC-GB2312-L1.ttf', // GB2312 一级 3755 字 + 标点/全角/Latin-1
+  'level1':
+      'fonts/NotoSansSC-GB2312-L1.ttf', // GB2312 一级 3755 字 + 标点/全角/Latin-1
   'full': 'fonts/NotoSansSC-GB2312.ttf', // 再加二级 3008 字
 };
 
@@ -90,7 +91,11 @@ const kCjkFontBoldFile = 'mp-cjk-bold.ttf.br';
 String? resolveCjkBoldLevel(String? regular, String? setting) {
   if (setting == 'false') return null;
   if (setting != null && !kCjkFontBoldSources.containsKey(setting)) {
-    throw ArgumentError.value(setting, 'cjkFontBold', '只能是 ${kCjkFontBoldSources.keys.join(' / ')} / false');
+    throw ArgumentError.value(
+      setting,
+      'cjkFontBold',
+      '只能是 ${kCjkFontBoldSources.keys.join(' / ')} / false',
+    );
   }
   if (regular == null) {
     if (setting != null) {
@@ -100,21 +105,35 @@ String? resolveCjkBoldLevel(String? regular, String? setting) {
   }
   if (setting == null) return regular;
   if (setting != regular) {
-    throw ArgumentError('cjk_font_bold: $setting 与 cjk_font: $regular 不一致。粗体与常规合一字体必须同一字表:'
-        '同一 family 下 SkParagraph 按字重只选一个字体,少掉的字会画成豆腐块。'
-        '把 cjk_font_bold 设成 $regular,或设 false 不带粗体。');
+    throw ArgumentError(
+      'cjk_font_bold: $setting 与 cjk_font: $regular 不一致。粗体与常规合一字体必须同一字表:'
+      '同一 family 下 SkParagraph 按字重只选一个字体,少掉的字会画成豆腐块。'
+      '把 cjk_font_bold 设成 $regular,或设 false 不带粗体。',
+    );
   }
   return setting;
 }
 
 /// 读入库的合一字体。[level] 是 `level1` / `full`;[bold] 读粗体。
-List<int> readCjkFont(String packageRoot, {String level = 'level1', bool bold = false}) {
+List<int> readCjkFont(
+  String packageRoot, {
+  String level = 'level1',
+  bool bold = false,
+}) {
   final rel = (bold ? kCjkFontBoldSources : kCjkFontSources)[level];
-  if (rel == null) throw ArgumentError.value(level, 'level', '只能是 ${kCjkFontSources.keys.join(' / ')}');
+  if (rel == null) {
+    throw ArgumentError.value(
+      level,
+      'level',
+      '只能是 ${kCjkFontSources.keys.join(' / ')}',
+    );
+  }
   final f = File(p.join(packageRoot, rel));
   if (!f.existsSync()) {
-    throw StateError('找不到常用汉字合一字体 ${f.path}(mp_flutter 包不完整?)。'
-        '可用 tools/fonts/gen_cjk_common.py 重新生成,或设 cjk_font: false 关闭。');
+    throw StateError(
+      '找不到常用汉字合一字体 ${f.path}(mp_flutter 包不完整?)。'
+      '可用 tools/fonts/gen_cjk_common.py 重新生成,或设 cjk_font: false 关闭。',
+    );
   }
   return f.readAsBytesSync();
 }

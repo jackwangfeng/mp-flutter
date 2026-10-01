@@ -24,7 +24,6 @@ import 'transform/split_main_dart_js.dart';
 import 'transform/unicode_property_escapes.dart';
 import 'version_matrix.dart';
 
-
 export 'toolchain.dart' show ToolchainMissing;
 
 /// main.dart.js 单个分片的默认预算(上限 2048KB 的 85%)。
@@ -91,18 +90,38 @@ Future<SizeReport> runPipeline({
   bool inputTiming = false,
 }) async {
   // 参数错误在构建前暴露,不白等一次 flutter build
-  buildHostPageJs(verify: verify, forcePlatform: forcePlatform, semanticsMirror: semanticsMirror, perfHud: perfHud,
-      androidInput: androidInput, inputTiming: inputTiming);
+  buildHostPageJs(
+    verify: verify,
+    forcePlatform: forcePlatform,
+    semanticsMirror: semanticsMirror,
+    perfHud: perfHud,
+    androidInput: androidInput,
+    inputTiming: inputTiming,
+  );
   if (!kPreloadModes.contains(preload)) {
-    throw ArgumentError.value(preload, 'preload', '只能是 ${kPreloadModes.join(' / ')}');
+    throw ArgumentError.value(
+      preload,
+      'preload',
+      '只能是 ${kPreloadModes.join(' / ')}',
+    );
   }
   if (!kCjkBoldTimings.contains(cjkFontBoldTiming)) {
-    throw ArgumentError.value(cjkFontBoldTiming, 'cjkFontBoldTiming', '只能是 ${kCjkBoldTimings.join(' / ')}');
+    throw ArgumentError.value(
+      cjkFontBoldTiming,
+      'cjkFontBoldTiming',
+      '只能是 ${kCjkBoldTimings.join(' / ')}',
+    );
   }
   if (!kBootAssetsModes.contains(bootAssets)) {
-    throw ArgumentError.value(bootAssets, 'bootAssets', '只能是 ${kBootAssetsModes.join(' / ')}');
+    throw ArgumentError.value(
+      bootAssets,
+      'bootAssets',
+      '只能是 ${kBootAssetsModes.join(' / ')}',
+    );
   }
-  final remoteBase = fontBaseUrl == null ? null : normalizeFontBaseUrl(fontBaseUrl);
+  final remoteBase = fontBaseUrl == null
+      ? null
+      : normalizeFontBaseUrl(fontBaseUrl);
   final splashBg = normalizeSplashColor(splashColor ?? kDefaultSplashColor);
   final bin = resolveFlutterBin(flutterBin, projectPath: projectPath);
 
@@ -110,7 +129,8 @@ Future<SizeReport> runPipeline({
   final version = FlutterVersion.parse(await readFlutterVersion(bin));
   VersionMatrix.check(version);
   stdout.writeln(
-      'Flutter ${version.version}${version.isOhosFork ? ' (ohos fork)' : ''}');
+    'Flutter ${version.version}${version.isOhosFork ? ' (ohos fork)' : ''}',
+  );
 
   // 2. 预检外部工具链(brotli / Node / esbuild)。都不是 Dart/Flutter 生态
   //    自带的工具,很多机器第一次跑就会缺——放在 `flutter build web` 之前
@@ -144,28 +164,37 @@ Future<SizeReport> runPipeline({
     buildTarget = entryTargetRelPath;
   } else {
     try {
-      buildTarget = writeEntrypoint(projectPath, targetRelPath: entryTargetRelPath);
+      buildTarget = writeEntrypoint(
+        projectPath,
+        targetRelPath: entryTargetRelPath,
+      );
     } on EntrypointSkipped catch (e) {
       stderr.writeln('⚠️  跳过安全区入口包装(SafeArea 在小程序里不会避开状态栏):${e.reason}');
       buildTarget = entryTargetRelPath;
     }
   }
   final webDir = await runFlutterWebBuild(
-      projectPath: projectPath,
-      flutterBin: bin,
-      profile: profile,
-      dartDefines: dartDefines,
-      dartDefineFromFile: dartDefineFromFile,
-      target: buildTarget);
+    projectPath: projectPath,
+    flutterBin: bin,
+    profile: profile,
+    dartDefines: dartDefines,
+    dartDefineFromFile: dartDefineFromFile,
+    target: buildTarget,
+  );
 
   // 分片依赖"顶层名不被重新绑定",而 dart2js 的延迟加载会在
   // initializeDeferredHunk 里改写顶层变量 x;两者不能同时用。
-  final deferredParts = webDir.listSync().whereType<File>()
-      .where((f) => p.basename(f.path).startsWith('main.dart.js_')).toList();
+  final deferredParts = webDir
+      .listSync()
+      .whereType<File>()
+      .where((f) => p.basename(f.path).startsWith('main.dart.js_'))
+      .toList();
   if (deferredParts.isNotEmpty) {
-    throw TransformFailure('main.dart.js 分片',
-        '检测到 dart2js 延迟加载产物(${p.basename(deferredParts.first.path)} 等),'
-        '目前不支持与分片同时使用。请去掉 `deferred as` 导入。');
+    throw TransformFailure(
+      'main.dart.js 分片',
+      '检测到 dart2js 延迟加载产物(${p.basename(deferredParts.first.path)} 等),'
+          '目前不支持与分片同时使用。请去掉 `deferred as` 导入。',
+    );
   }
 
   final out = Directory(outputPath);
@@ -178,14 +207,21 @@ Future<SizeReport> runPipeline({
     f.writeAsStringSync(content);
     // 微信按源码字节数计包体积。必须用 utf8.encode:
     // String.length 是 UTF-16 code unit 数,含中文的文件会把体积算少约 30%。
-    entries.add(PackageEntry(
-        path: relPath, sourceBytes: utf8.encode(content).length, package: package));
+    entries.add(
+      PackageEntry(
+        path: relPath,
+        sourceBytes: utf8.encode(content).length,
+        package: package,
+      ),
+    );
   }
 
   void emitBytes(String relPath, List<int> bytes, String package) {
     final f = File(p.join(outputPath, relPath))..createSync(recursive: true);
     f.writeAsBytesSync(bytes);
-    entries.add(PackageEntry(path: relPath, sourceBytes: bytes.length, package: package));
+    entries.add(
+      PackageEntry(path: relPath, sourceBytes: bytes.length, package: package),
+    );
   }
 
   // 3. canvaskit.js 变换:先 ESM→CJS + 摘 Safari workaround,再降级到 es2017。
@@ -210,40 +246,71 @@ Future<SizeReport> runPipeline({
   // dart 分片预算取上限的 85%:开发者工具界面「预览/真机调试」计的 JS 源码
   // 尺寸比 cli preview 多约 6–8%(真实电商小程序实测同一产物 2045457B → 2166KB),
   // 原因未明(疑似调试注入),留足余量。
-  final mainJsRaw = File(p.join(webDir.path, 'main.dart.js')).readAsStringSync();
+  final mainJsRaw = File(
+    p.join(webDir.path, 'main.dart.js'),
+  ).readAsStringSync();
   // 常用汉字合一字体(cjk_font,默认 full):引擎把它当作 Roboto 之后的第一个
   // 回退字体、缺字检测时算上它(见 transform/font_fallback.dart)
   if (cjkFont != null && !kCjkFontSources.containsKey(cjkFont)) {
-    throw ArgumentError.value(cjkFont, 'cjkFont', '只能是 ${kCjkFontSources.keys.join(' / ')}');
+    throw ArgumentError.value(
+      cjkFont,
+      'cjkFont',
+      '只能是 ${kCjkFontSources.keys.join(' / ')}',
+    );
   }
   // 粗体(cjk_font_bold):调用方传的是已生效档位(CLI 用 resolveCjkBoldLevel 算好);
   // 这里只防组合不合法(与常规不同档会出豆腐块,见 cjk_font.dart)
   if (cjkFontBold != null) resolveCjkBoldLevel(cjkFont, cjkFontBold);
-  final mainJsPatched = cjkFont != null ? patchFontFallback(mainJsRaw, family: kCjkFontFamily) : mainJsRaw;
+  final mainJsPatched = cjkFont != null
+      ? patchFontFallback(mainJsRaw, family: kCjkFontFamily)
+      : mainJsRaw;
   // 正则 Unicode 属性转义 \p{…} 改写成码点区间(安卓微信 JS 引擎不带 ICU,
   // 不支持;Flutter text_painter 插入文字时会构造,见 transform/unicode_property_escapes.dart)。
   // 必须在分片之前:分片器只搬语句,不碰字符串内容。
-  final mainJsSource = await rewriteUnicodePropertyEscapes(mainJsPatched,
-      toolPath: unicodePropsTool,
-      onRewritten: (n, props) => stdout.writeln('正则 Unicode 属性转义改写:$n 处(${props.join(', ')})'));
+  final mainJsSource = await rewriteUnicodePropertyEscapes(
+    mainJsPatched,
+    toolPath: unicodePropsTool,
+    onRewritten: (n, props) =>
+        stdout.writeln('正则 Unicode 属性转义改写:$n 处(${props.join(', ')})'),
+  );
   // --force-platform android/android-noIntl:分片额外遮蔽 RegExp,复现真机不支持 \p{…}
-  final shadowRegExp = forcePlatform == 'android' || forcePlatform == 'android-noIntl';
-  final preambleProbe = injectPreamble('', shimPath: '../bom-shim.js', shadowRegExp: shadowRegExp);
-  final chunkBudget = (dartChunkBudgetBytes ?? kDartChunkBudgetBytes) -
+  final shadowRegExp =
+      forcePlatform == 'android' || forcePlatform == 'android-noIntl';
+  final preambleProbe = injectPreamble(
+    '',
+    shimPath: '../bom-shim.js',
+    shadowRegExp: shadowRegExp,
+  );
+  final chunkBudget =
+      (dartChunkBudgetBytes ?? kDartChunkBudgetBytes) -
       utf8.encode(preambleProbe).length;
-  final dartChunks = await splitMainDartJs(mainJsSource,
-      budgetBytes: chunkBudget, scopeRequire: '../$kDartScopePath', toolPath: splitTool);
+  final dartChunks = await splitMainDartJs(
+    mainJsSource,
+    budgetBytes: chunkBudget,
+    scopeRequire: '../$kDartScopePath',
+    toolPath: splitTool,
+  );
   final dartPackages = <String>[];
   final dartModulePaths = <String>[];
   for (var i = 0; i < dartChunks.length; i++) {
     final pkg = '$_dartPackagePrefix$i';
     dartPackages.add(pkg);
     dartModulePaths.add('$pkg/dart.js');
-    emitText('$pkg/dart.js', injectPreamble(dartChunks[i], shimPath: '../bom-shim.js', shadowRegExp: shadowRegExp), pkg);
+    emitText(
+      '$pkg/dart.js',
+      injectPreamble(
+        dartChunks[i],
+        shimPath: '../bom-shim.js',
+        shadowRegExp: shadowRegExp,
+      ),
+      pkg,
+    );
   }
-  emitText(kDartScopePath,
-      '// [mp-flutter] Dart 分片共享作用域:各分片经它传递 dart2js 的顶层名。\nmodule.exports = {};\n',
-      'main');
+  emitText(
+    kDartScopePath,
+    '// [mp-flutter] Dart 分片共享作用域:各分片经它传递 dart2js 的顶层名。\nmodule.exports = {};\n',
+    'main',
+  );
 
   // 5. wasm → 分包(brotli 压缩)。WXWebAssembly.instantiate 能直接加载
   //    brotli 压缩过的 .wasm.br(真机与模拟器均已验证,见 docs/architecture.md)。
@@ -251,14 +318,29 @@ Future<SizeReport> runPipeline({
   //    transform/canvaskit_wasm.dart),再压缩。
   final wasmTmpDir = Directory.systemTemp.createTempSync('mp_flutter_wasm_');
   final stripped = stripIcuDictionaries(
-      File(p.join(webDir.path, _canvasKitDir, 'canvaskit.wasm')).readAsBytesSync());
-  final wasm = File(p.join(wasmTmpDir.path, 'canvaskit.wasm'))..writeAsBytesSync(stripped.bytes);
+    File(
+      p.join(webDir.path, _canvasKitDir, 'canvaskit.wasm'),
+    ).readAsBytesSync(),
+  );
+  final wasm = File(p.join(wasmTmpDir.path, 'canvaskit.wasm'))
+    ..writeAsBytesSync(stripped.bytes);
   final brTmp = File(p.join(wasmTmpDir.path, 'canvaskit.wasm.br'));
-  final br = Process.runSync('brotli', ['-q', '11', '-f', wasm.path, '-o', brTmp.path]);
+  final br = Process.runSync('brotli', [
+    '-q',
+    '11',
+    '-f',
+    wasm.path,
+    '-o',
+    brTmp.path,
+  ]);
   if (br.exitCode != 0) {
     throw StateError('brotli 压缩 canvaskit.wasm 失败:${br.stderr}');
   }
-  emitBytes('$_wasmPackage/canvaskit.wasm.br', brTmp.readAsBytesSync(), _wasmPackage);
+  emitBytes(
+    '$_wasmPackage/canvaskit.wasm.br',
+    brTmp.readAsBytesSync(),
+    _wasmPackage,
+  );
   wasmTmpDir.deleteSync(recursive: true);
 
   // 6a. 运行时 JS 原样拷入(bom-shim / canvaskit-loader / boot)。放在资源装箱之前:
@@ -267,8 +349,7 @@ Future<SizeReport> runPipeline({
   // 用 resolvePackageRoot 而不是 Platform.script 上溯:`dart run flutter_miniprogram`
   // 在消费者工程里跑的是编译好的 snapshot,Platform.script 指向消费者
   // `.dart_tool` 下的临时产物,不在本包源码树下,固定上溯层数会跳到无关目录。
-  final runtimeDir =
-      Directory(p.join(await resolvePackageRoot(), 'runtime'));
+  final runtimeDir = Directory(p.join(await resolvePackageRoot(), 'runtime'));
   for (final name in [
     'bom-shim.js',
     'canvaskit-loader.js',
@@ -289,18 +370,28 @@ Future<SizeReport> runPipeline({
     'native-views.js',
     'semantics-mirror.js',
   ]) {
-    emitText(name, File(p.join(runtimeDir.path, name)).readAsStringSync(), 'main');
+    emitText(
+      name,
+      File(p.join(runtimeDir.path, name)).readAsStringSync(),
+      'main',
+    );
   }
   // perf-hud.js 只在 --perf-hud 打开时才写进产物(M3):关闭时该文件完全不
   // 出现在包体积里,承载页也不会 require 到它(见 buildHostPageJs)。
   if (perfHud) {
-    emitText('perf-hud.js',
-        File(p.join(runtimeDir.path, 'perf-hud.js')).readAsStringSync(), 'main');
+    emitText(
+      'perf-hud.js',
+      File(p.join(runtimeDir.path, 'perf-hud.js')).readAsStringSync(),
+      'main',
+    );
   }
   // input-timing.js 同理,只在 --input-timing 打开时进产物
   if (inputTiming) {
-    emitText('input-timing.js',
-        File(p.join(runtimeDir.path, 'input-timing.js')).readAsStringSync(), 'main');
+    emitText(
+      'input-timing.js',
+      File(p.join(runtimeDir.path, 'input-timing.js')).readAsStringSync(),
+      'main',
+    );
   }
 
   // 6. 资源 → base64 模块,装箱到 pkg-assets-0..N
@@ -319,12 +410,14 @@ Future<SizeReport> runPipeline({
     throw const TransformFailure(
       '回退字体表:main.dart.js 里找不到 Roboto 路径',
       '引擎默认字体 Roboto 缺失时启动即崩(Null check operator used on a null value)。'
-      '引擎的字体表写法可能随 Flutter 升级变了,需更新 fonts.dart 的 extractFallbackFontPaths。',
+          '引擎的字体表写法可能随 Flutter 升级变了,需更新 fonts.dart 的 extractFallbackFontPaths。',
     );
   }
   if (!fontPaths.any((f) => f.startsWith('notosanssc/'))) {
-    stderr.writeln('⚠️  main.dart.js 里没找到简体中文回退字体(notosanssc)路径,中文将无法显示。'
-        '引擎的字体表写法可能变了,请更新 fonts.dart。');
+    stderr.writeln(
+      '⚠️  main.dart.js 里没找到简体中文回退字体(notosanssc)路径,中文将无法显示。'
+      '引擎的字体表写法可能变了,请更新 fonts.dart。',
+    );
   }
   assets.addAll(await fetchFallbackFonts(fontPaths));
 
@@ -335,16 +428,27 @@ Future<SizeReport> runPipeline({
   // 发出后才开始读它;引擎取字体时还没到就先按 404 应答(首帧不等它),到了再经
   // 入口包装的 loadFontFromList 补注册(见 runtime/cjk-font.js createCjkBold)。
   if (cjkFont != null) {
-    assets['assets/FontManifest.json'] =
-        addCjkFontToManifest(assets['assets/FontManifest.json'], bold: cjkFontBold != null);
+    assets['assets/FontManifest.json'] = addCjkFontToManifest(
+      assets['assets/FontManifest.json'],
+      bold: cjkFontBold != null,
+    );
     final root = await resolvePackageRoot();
     void emitFont(List<int> raw, String package, String file) {
       final tmp = Directory.systemTemp.createTempSync('mp_flutter_cjk_');
       try {
         final src = File(p.join(tmp.path, 'cjk.ttf'))..writeAsBytesSync(raw);
         final dst = File(p.join(tmp.path, 'cjk.ttf.br'));
-        final r = Process.runSync('brotli', ['-q', '11', '-f', src.path, '-o', dst.path]);
-        if (r.exitCode != 0) throw StateError('brotli 压缩常用汉字合一字体失败:${r.stderr}');
+        final r = Process.runSync('brotli', [
+          '-q',
+          '11',
+          '-f',
+          src.path,
+          '-o',
+          dst.path,
+        ]);
+        if (r.exitCode != 0) {
+          throw StateError('brotli 压缩常用汉字合一字体失败:${r.stderr}');
+        }
         emitBytes('$package/$file', dst.readAsBytesSync(), package);
       } finally {
         tmp.deleteSync(recursive: true);
@@ -354,7 +458,11 @@ Future<SizeReport> runPipeline({
 
     emitFont(readCjkFont(root, level: cjkFont), kCjkFontPackage, kCjkFontFile);
     if (cjkFontBold != null) {
-      emitFont(readCjkFont(root, level: cjkFontBold, bold: true), kCjkFontBoldPackage, kCjkFontBoldFile);
+      emitFont(
+        readCjkFont(root, level: cjkFontBold, bold: true),
+        kCjkFontBoldPackage,
+        kCjkFontBoldFile,
+      );
     }
   }
 
@@ -369,8 +477,12 @@ Future<SizeReport> runPipeline({
   // 资源分组:启动必需 → pkg-assets-boot(首帧前加载;下面 placeBootAssets 默认把它并进主包);NOTICES、回退字体
   // (按码位邻近分组)、其余资源 → 按需分包。
   final fontRank = fallbackFontCodepointRank(flutterRootFromBin(bin));
-  final planned = planAssetGroups(assets,
-      fontRank: fontRank, excludeFallbackFonts: remoteBase != null, warn: stderr.writeln);
+  final planned = planAssetGroups(
+    assets,
+    fontRank: fontRank,
+    excludeFallbackFonts: remoteBase != null,
+    warn: stderr.writeln,
+  );
   // 冷启动 boot_assets:启动资源并进主包或 dart 分包,少一个首帧前分包请求。
   // 主包此刻已有 canvaskit.js + 运行时 JS;加载表(每个资源约 400B)、承载页与
   // 工程文件还没生成,按 64KB + 每资源 400B 预留。
@@ -378,11 +490,15 @@ Future<SizeReport> runPipeline({
   for (final e in entries) {
     byPackage[e.package] = (byPackage[e.package] ?? 0) + e.sourceBytes;
   }
-  final placement = placeBootAssets(planned, assets,
-      mode: bootAssets,
-      mainBytes: (byPackage['main'] ?? 0) + 64 * 1024 + assets.length * 400,
-      dartPackageBytes: {for (final d in dartPackages) d: byPackage[d] ?? 0});
-  if (bootAssets != 'package' && placement.where == kBootAssetPackage &&
+  final placement = placeBootAssets(
+    planned,
+    assets,
+    mode: bootAssets,
+    mainBytes: (byPackage['main'] ?? 0) + 64 * 1024 + assets.length * 400,
+    dartPackageBytes: {for (final d in dartPackages) d: byPackage[d] ?? 0},
+  );
+  if (bootAssets != 'package' &&
+      placement.where == kBootAssetPackage &&
       planned.any((g) => g.name == kBootAssetPackage)) {
     stderr.writeln('ℹ️  启动资源主包/dart 分包都放不下,仍单独放在 $kBootAssetPackage 分包。');
   }
@@ -397,25 +513,38 @@ Future<SizeReport> runPipeline({
   final packed = {for (final g in groups) ...g.paths};
   final remoteFonts = remoteBase == null
       ? const <String>[]
-      : (assets.keys.where((k) => k.startsWith(kFontPrefix) && !packed.contains(k)).toList()..sort());
+      : (assets.keys
+            .where((k) => k.startsWith(kFontPrefix) && !packed.contains(k))
+            .toList()
+          ..sort());
   for (final k in remoteFonts) {
-    final f = File(p.join(outputPath, kRemoteFontDir, k.substring(kFontPrefix.length)))
-      ..createSync(recursive: true);
+    final f = File(
+      p.join(outputPath, kRemoteFontDir, k.substring(kFontPrefix.length)),
+    )..createSync(recursive: true);
     f.writeAsBytesSync(assets[k]!);
   }
   if (remoteFonts.isNotEmpty) {
-    stdout.writeln('远端字体:${remoteFonts.length} 个回退字体分片未打包,已写到 '
-        '${p.join(outputPath, kRemoteFontDir)}/,请原样上传到 $remoteBase'
-        '(该域名须加入小程序后台 request 合法域名)。');
+    stdout.writeln(
+      '远端字体:${remoteFonts.length} 个回退字体分片未打包,已写到 '
+      '${p.join(outputPath, kRemoteFontDir)}/,请原样上传到 $remoteBase'
+      '(该域名须加入小程序后台 request 合法域名)。',
+    );
   }
 
   final subPackages = [
-    ...dartPackages, _wasmPackage, if (cjkFont != null) kCjkFontPackage,
-    if (cjkFont != null && cjkFontBold != null) kCjkFontBoldPackage, ...bundle.packageRoots,
+    ...dartPackages,
+    _wasmPackage,
+    if (cjkFont != null) kCjkFontPackage,
+    if (cjkFont != null && cjkFontBold != null) kCjkFontBoldPackage,
+    ...bundle.packageRoots,
   ];
   // 首帧前必需的分包:只有这些在 boot 时并行拉取;按需分包由资源条目的
   // require.async 在引擎 fetch 时才触发下载
-  final bootSubPackages = [...dartPackages, _wasmPackage, ...bundle.bootPackageRoots];
+  final bootSubPackages = [
+    ...dartPackages,
+    _wasmPackage,
+    ...bundle.bootPackageRoots,
+  ];
   for (final root in bootSubPackages) {
     emitText('$root/$kReadyModule', kReadyModuleSource, root);
   }
@@ -429,10 +558,18 @@ Future<SizeReport> runPipeline({
       remoteFonts: remoteFonts,
       cjkFont: cjkFont == null
           ? null
-          : (asset: kCjkFontAsset, package: kCjkFontPackage, file: kCjkFontFile),
+          : (
+              asset: kCjkFontAsset,
+              package: kCjkFontPackage,
+              file: kCjkFontFile,
+            ),
       cjkFontBold: cjkFont == null || cjkFontBold == null
           ? null
-          : (asset: kCjkFontBoldAsset, package: kCjkFontBoldPackage, file: kCjkFontBoldFile),
+          : (
+              asset: kCjkFontBoldAsset,
+              package: kCjkFontBoldPackage,
+              file: kCjkFontBoldFile,
+            ),
       deferredSubPackages: bundle.bootPackageRoots,
       wasmSubPackage: earlyWasm ? _wasmPackage : null,
     ),
@@ -454,14 +591,19 @@ Future<SizeReport> runPipeline({
     // 占位页是 emitProject 之后才计入各包的,额度留 8KB 余量
     // 预下载额度 2MB,按 preload 策略给出的顺序贪心挑(见 preloadOrder)
     preloadRoots: selectPreloadPackages(
-        preloadOrder(preload,
-            dartPackages: dartPackages,
-            bootAssetPackages: bundle.bootPackageRoots,
-            wasmPackage: _wasmPackage,
-            cjkPackage: cjkFont != null ? kCjkFontPackage : null,
-            cjkBoldPackage: cjkFont != null && cjkFontBold != null ? kCjkFontBoldPackage : null),
-        packageBytes,
-        quotaBytes: kPreloadQuotaBytes - 8 * 1024),
+      preloadOrder(
+        preload,
+        dartPackages: dartPackages,
+        bootAssetPackages: bundle.bootPackageRoots,
+        wasmPackage: _wasmPackage,
+        cjkPackage: cjkFont != null ? kCjkFontPackage : null,
+        cjkBoldPackage: cjkFont != null && cjkFontBold != null
+            ? kCjkFontBoldPackage
+            : null,
+      ),
+      packageBytes,
+      quotaBytes: kPreloadQuotaBytes - 8 * 1024,
+    ),
     initialRenderingCache: initialRenderingCache,
     lazyCodeLoading: lazyCodeLoading,
     requireLocation: requireLocation,
@@ -478,13 +620,23 @@ Future<SizeReport> runPipeline({
   });
 
   // 承载页逻辑(见 buildHostPageJs)
-  emitText('$_entryPage.js',
-      buildHostPageJs(verify: verify, forcePlatform: forcePlatform, semanticsMirror: semanticsMirror,
-          perfHud: perfHud, shaderWarmup: shaderWarmup, shaderWarmupLight: shaderWarmupLight,
-          bootStages: bootSubPackages.length + 4,
-          earlyWasm: earlyWasm, cjkFontBoldTiming: cjkFontBoldTiming,
-          androidInput: androidInput, inputTiming: inputTiming),
-      'main');
+  emitText(
+    '$_entryPage.js',
+    buildHostPageJs(
+      verify: verify,
+      forcePlatform: forcePlatform,
+      semanticsMirror: semanticsMirror,
+      perfHud: perfHud,
+      shaderWarmup: shaderWarmup,
+      shaderWarmupLight: shaderWarmupLight,
+      bootStages: bootSubPackages.length + 4,
+      earlyWasm: earlyWasm,
+      cjkFontBoldTiming: cjkFontBoldTiming,
+      androidInput: androidInput,
+      inputTiming: inputTiming,
+    ),
+    'main',
+  );
 
   // 9. flutter_ohos 已知分叉差异 → 构建期警告(是 warning 不是 error,
   //    大量 App 不会触发 InkSparkle / stretch overscroll 这两个 shader)。
@@ -492,9 +644,11 @@ Future<SizeReport> runPipeline({
     if (d.id == 'missing_material_shaders') {
       final hasShaders = assets.keys.any((k) => k.contains('shaders/'));
       if (!hasShaders) {
-        stderr.writeln('⚠️  ${d.description}\n'
-            '    后果:${d.consequence}\n'
-            '    绕法:把 .frag 源文件拷进 App 目录并在 pubspec 的 flutter: shaders: 下声明。');
+        stderr.writeln(
+          '⚠️  ${d.description}\n'
+          '    后果:${d.consequence}\n'
+          '    绕法:把 .frag 源文件拷进 App 目录并在 pubspec 的 flutter: shaders: 下声明。',
+        );
       }
     }
   }
@@ -508,7 +662,9 @@ Future<SizeReport> runPipeline({
 /// 启动界面应用名的缺省值:工程 pubspec.yaml 的 `name`。
 String? _pubspecName(String projectPath) {
   try {
-    final doc = loadYaml(File(p.join(projectPath, 'pubspec.yaml')).readAsStringSync());
+    final doc = loadYaml(
+      File(p.join(projectPath, 'pubspec.yaml')).readAsStringSync(),
+    );
     final name = doc is Map ? doc['name'] : null;
     return name is String && name.isNotEmpty ? name : null;
   } catch (_) {
@@ -583,22 +739,36 @@ String buildHostPageJs({
   bool inputTiming = false,
 }) {
   if (!kAndroidInputModes.contains(androidInput)) {
-    throw ArgumentError.value(androidInput, 'androidInput', '只能是 ${kAndroidInputModes.join(' / ')}');
+    throw ArgumentError.value(
+      androidInput,
+      'androidInput',
+      '只能是 ${kAndroidInputModes.join(' / ')}',
+    );
   }
   final t = inputTiming;
   if (forcePlatform != null) {
     if (!verify) {
-      throw ArgumentError.value(forcePlatform, 'forcePlatform', '只能与 --verify 同用');
+      throw ArgumentError.value(
+        forcePlatform,
+        'forcePlatform',
+        '只能与 --verify 同用',
+      );
     }
     if (!kForcePlatforms.contains(forcePlatform)) {
-      throw ArgumentError.value(forcePlatform, 'forcePlatform', '只支持 ${kForcePlatforms.join('/')}');
+      throw ArgumentError.value(
+        forcePlatform,
+        'forcePlatform',
+        '只支持 ${kForcePlatforms.join('/')}',
+      );
     }
   }
-  final forced = forcePlatform == null ? null : _forcePlatformArgs(forcePlatform);
+  final forced = forcePlatform == null
+      ? null
+      : _forcePlatformArgs(forcePlatform);
   final platformArg = forced == null
       ? ''
       : ',\n        platform: ${jsonEncode(forced.platform)}'
-          '${forced.simulate == null ? '' : ',\n        simulate: ${jsonEncode(forced.simulate)}'}';
+            '${forced.simulate == null ? '' : ',\n        simulate: ${jsonEncode(forced.simulate)}'}';
   // --perf-hud:把冷启动阶段计时器接进 boot() 的可选 onStage 钩子(见 boot.js
   // 文件头注释——这几个调用点本身只有一次 typeof 判断,发生在应用整个生命
   // 周期里个位数次,不是热路径,不影响 --perf-hud 关闭时的运行时开销)。
@@ -608,7 +778,8 @@ String buildHostPageJs({
   final perfHudStageArg = perfHud
       ? "if (__mpBootTimer) { __mpBootTimer.mark(stage); if (stage === 'first-frame') __mpBootTimer.finish(); } "
       : '';
-  final stageArg = ',\n        onStage: (stage) => { $perfHudStageArg'
+  final stageArg =
+      ',\n        onStage: (stage) => { $perfHudStageArg'
       'this.mpBootStage(stage); }'
       '${perfHud ? ',\n        perfLog: (line) => console.log(line),\n        frameProf: __mpFrameProf,\n        pkgTrace: __mpPkgTrace' : ''}'
       // shader_warmup(默认开,见 shader-warmup.js);关闭时显式告诉 boot 不装。
@@ -883,7 +1054,8 @@ const _inputTimingSetData =
 
 /// --perf-hud(默认关):文本桥的 setData 计时——同步部分(序列化 + 投递给视图层)
 /// 的耗时与负载字节数进帧明细(`tb=`、`setData=次数/字节`),拆"聚焦卡顿"用。
-const _perfHudTextSetData = ''', (patch, ms) => { if (this.mpPerf) { let n = 0; try { n = JSON.stringify(patch).length; } catch (e) {} this.mpPerf.note('setData', ms, n); } }''';
+const _perfHudTextSetData =
+    ''', (patch, ms) => { if (this.mpPerf) { let n = 0; try { n = JSON.stringify(patch).length; } catch (e) {} this.mpPerf.note('setData', ms, n); } }''';
 
 /// --perf-hud(默认关):boot 成功后启动稳态性能采样(fps/帧耗时/gl 调用/
 /// 图片解码/长任务,每秒一行 `[mp-perf]`,外加左上角浮层)。同 WXML 伴生层

@@ -2,7 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 
-import 'registry_stub.dart' if (dart.library.js_interop) 'registry_web.dart'
+import 'registry_stub.dart'
+    if (dart.library.js_interop) 'registry_web.dart'
     as backend;
 
 /// 小程序原生组件的三种类型;与 Task 2 同步层约定的 `data-mp-native` 取值
@@ -65,7 +66,9 @@ abstract class MpNativeBackend {
 
   /// 设置(或清空,传 null)`viewId` 收到 `mpnative` 事件时要调用的回调。
   void setEventHandler(
-      int viewId, void Function(String type, Object? detail)? handler);
+    int viewId,
+    void Function(String type, Object? detail)? handler,
+  );
 
   /// 对应 widget 已 dispose,取代旧的"按 viewId 撤销"接口——不管
   /// [requestToken] 对应的平台视图有没有创建完成(工厂有没有跑过、
@@ -116,12 +119,11 @@ bool get mpNativeAvailable => _backend.isAvailable;
 /// 原生视图接着"是用可空的 sender 字段表示的,由 [MpNativeView] 的 State 在
 /// attach/detach 时维护。
 abstract class MpNativeControllerBinding {
-  Future<String> Function(String method, [Map<String, Object?> args])?
-      _sender;
+  Future<String> Function(String method, [Map<String, Object?> args])? _sender;
 
   void _bind(
-      Future<String> Function(String method, [Map<String, Object?> args])
-          sender) {
+    Future<String> Function(String method, [Map<String, Object?> args]) sender,
+  ) {
     _sender = sender;
   }
 
@@ -132,12 +134,15 @@ abstract class MpNativeControllerBinding {
   /// 子类(`MpVideoController` 等)调用这个来真正发出一条命令。未绑定到任何
   /// 已创建的原生视图时(stub 平台、原生组件还没渲染完成前就被 dispose、
   /// 或者单纯还没 build 过一次)抛 [UnsupportedError],说明"仅小程序可用"。
-  Future<String> sendCommand(String method,
-      [Map<String, Object?> args = const {}]) {
+  Future<String> sendCommand(
+    String method, [
+    Map<String, Object?> args = const {},
+  ]) {
     final sender = _sender;
     if (sender == null) {
       throw UnsupportedError(
-          'mp_flutter_native: 该操作仅在 mp-flutter 编译的小程序中、且对应的原生组件已创建后可用');
+        'mp_flutter_native: 该操作仅在 mp-flutter 编译的小程序中、且对应的原生组件已创建后可用',
+      );
     }
     return sender(method, args);
   }
@@ -210,8 +215,10 @@ class _MpNativeViewState extends State<MpNativeView> {
     final id = _viewId;
     final controller = widget.controller;
     if (id == null || controller == null) return;
-    controller._bind((method, [args = const {}]) =>
-        _backend.sendCommand(id, method, jsonEncode(args)));
+    controller._bind(
+      (method, [args = const {}]) =>
+          _backend.sendCommand(id, method, jsonEncode(args)),
+    );
   }
 
   void _onViewCreated(int id) {

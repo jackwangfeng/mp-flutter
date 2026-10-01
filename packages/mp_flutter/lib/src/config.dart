@@ -197,18 +197,23 @@ class MpFlutterConfig {
   final String? target;
   final bool? perfHud;
   final bool? licenses;
+
   /// `shader_warmup`:首帧后空闲预热(默认 true)。null = 未配置。
   final bool? shaderWarmup;
+
   /// `shader_warmup_light`:true 时预热只画轻项,跳过阴影/模糊/颜色矩阵/混合
   /// 这类真机上单个 program 可达上百 ms 的重项(默认 false)。null = 未配置。
   final bool? shaderWarmupLight;
+
   /// `cjk_font`:'level1' / 'full' / 'false'(true 视为 full,与默认值一致)。null = 未配置。
   final String? cjkFont;
+
   /// `cjk_font_bold`:'level1' / 'full' / 'false'。null = 未配置(或写 true),跟随 cjk_font。
   final String? cjkFontBold;
   final String? fontBaseUrl;
   final String? splashTitle;
   final String? splashColor;
+
   /// 冷启动开关(见 [kPreloadModes]/[kCjkBoldTimings]/[kBootAssetsModes])。null = 未配置。
   final String? preload;
   final String? cjkFontBoldTiming;
@@ -216,8 +221,10 @@ class MpFlutterConfig {
   final String? bootAssets;
   final bool? initialRenderingCache;
   final bool? lazyCodeLoading;
+
   /// `android_input`:见 [kAndroidInputConfigModes]。null = 未配置。
   final String? androidInput;
+
   /// `input_timing`:输入计时诊断(默认 false)。null = 未配置。
   final bool? inputTiming;
 
@@ -285,18 +292,24 @@ MpFlutterConfig loadConfig(
   if (doc == null) return MpFlutterConfig.empty; // 空文件
   if (doc is! Map) {
     throw ConfigParseFailure(
-        path, '根节点必须是一个映射(key: value 形式),实际是 ${doc.runtimeType}');
+      path,
+      '根节点必须是一个映射(key: value 形式),实际是 ${doc.runtimeType}',
+    );
   }
   // 绑到一个静态类型就是 Map 的变量:上面的 `doc is! Map` 只在本层提升类型,
   // 下面的嵌套闭包(asString/asBool)捕获的是外层变量,拿到的仍是 Object?,
   // 需要一个类型明确的绑定而不是每次都重新做同样的 is 检查。
   final Map map = doc;
 
-  final unknown =
-      map.keys.map((k) => '$k').where((k) => !kKnownConfigKeys.contains(k)).toList();
+  final unknown = map.keys
+      .map((k) => '$k')
+      .where((k) => !kKnownConfigKeys.contains(k))
+      .toList();
   if (unknown.isNotEmpty) {
-    warnFn('⚠️  $path 含未知配置键:${unknown.join(', ')}(已忽略,不影响其余键生效;'
-        '如果这是拼写错误,请对照支持的键:${kKnownConfigKeys.join(', ')})');
+    warnFn(
+      '⚠️  $path 含未知配置键:${unknown.join(', ')}(已忽略,不影响其余键生效;'
+      '如果这是拼写错误,请对照支持的键:${kKnownConfigKeys.join(', ')})',
+    );
   }
 
   String? asString(String key) {
@@ -310,7 +323,10 @@ MpFlutterConfig loadConfig(
     final v = map[key];
     if (v == null) return null;
     if (v is bool) return v;
-    throw ConfigParseFailure(path, '$key 必须是布尔值(true/false),实际是:$v(${v.runtimeType})');
+    throw ConfigParseFailure(
+      path,
+      '$key 必须是布尔值(true/false),实际是:$v(${v.runtimeType})',
+    );
   }
 
   String? asCjkLevel(String key) {
@@ -319,7 +335,10 @@ MpFlutterConfig loadConfig(
     if (v == true) return 'full';
     if (v == false) return 'false';
     if (v is String && kCjkFontLevels.contains(v)) return v;
-    throw ConfigParseFailure(path, '$key 只能是 level1 / full / false,实际是:$v(${v.runtimeType})');
+    throw ConfigParseFailure(
+      path,
+      '$key 只能是 level1 / full / false,实际是:$v(${v.runtimeType})',
+    );
   }
 
   // cjk_font_bold:true = 跟随 cjk_font(与不写相同)
@@ -328,32 +347,41 @@ MpFlutterConfig loadConfig(
     if (v == null || v == true) return null;
     if (v == false) return 'false';
     if (v is String && kCjkFontLevels.contains(v)) return v;
-    throw ConfigParseFailure(path, '$key 只能是 level1 / full / false,实际是:$v(${v.runtimeType})');
+    throw ConfigParseFailure(
+      path,
+      '$key 只能是 level1 / full / false,实际是:$v(${v.runtimeType})',
+    );
   }
 
   String? asEnum(String key, List<String> allowed) {
     final v = map[key];
     if (v == null) return null;
     if (v is String && allowed.contains(v)) return v;
-    throw ConfigParseFailure(path, '$key 只能是 ${allowed.join(' / ')},实际是:$v(${v.runtimeType})');
+    throw ConfigParseFailure(
+      path,
+      '$key 只能是 ${allowed.join(' / ')},实际是:$v(${v.runtimeType})',
+    );
   }
 
   List<String>? asPrivateInfoList(String key) {
     final v = map[key];
     if (v == null) return null;
     if (v is! List) {
-      throw ConfigParseFailure(
-          path, '$key 必须是字符串列表,实际是:$v(${v.runtimeType})');
+      throw ConfigParseFailure(path, '$key 必须是字符串列表,实际是:$v(${v.runtimeType})');
     }
     final result = <String>[];
     for (final item in v) {
       if (item is! String) {
         throw ConfigParseFailure(
-            path, '$key 的元素必须是字符串,实际是:$item(${item.runtimeType})');
+          path,
+          '$key 的元素必须是字符串,实际是:$item(${item.runtimeType})',
+        );
       }
       if (!kAllowedPrivateInfos.contains(item)) {
-        throw ConfigParseFailure(path,
-            '$key 含不支持的取值:"$item"(仅支持:${kAllowedPrivateInfos.join(', ')})');
+        throw ConfigParseFailure(
+          path,
+          '$key 含不支持的取值:"$item"(仅支持:${kAllowedPrivateInfos.join(', ')})',
+        );
       }
       result.add(item);
     }
@@ -365,7 +393,9 @@ MpFlutterConfig loadConfig(
     if (v == null) return null;
     if (v is! Map) {
       throw ConfigParseFailure(
-          path, '$key 必须是映射(key: value 形式),实际是:$v(${v.runtimeType})');
+        path,
+        '$key 必须是映射(key: value 形式),实际是:$v(${v.runtimeType})',
+      );
     }
     // 值统一 stringify:yaml 里 `KEY: 1`/`KEY: true` 这类非字符串标量写法也
     // 应该能透传给 flutter build web(--dart-define 的值本来就是字符串)。
@@ -377,8 +407,10 @@ MpFlutterConfig loadConfig(
     final result = <String, String>{};
     v.forEach((k, val) {
       if (val == null || val is Map || val is List) {
-        throw ConfigParseFailure(path,
-            '$key.$k 的值必须是标量(字符串/数字/布尔值),不能是 null 或映射/列表,实际是:$val(${val.runtimeType})');
+        throw ConfigParseFailure(
+          path,
+          '$key.$k 的值必须是标量(字符串/数字/布尔值),不能是 null 或映射/列表,实际是:$val(${val.runtimeType})',
+        );
       }
       result['$k'] = '$val';
     });
@@ -425,7 +457,8 @@ MapEntry<String, String> parseDartDefineEntry(String raw) {
   final idx = raw.indexOf('=');
   if (idx <= 0) {
     throw FormatException(
-        '--dart-define 格式错误:"$raw"(必须是 KEY=VALUE 形式,KEY 不能为空)');
+      '--dart-define 格式错误:"$raw"(必须是 KEY=VALUE 形式,KEY 不能为空)',
+    );
   }
   return MapEntry(raw.substring(0, idx), raw.substring(idx + 1));
 }
@@ -439,7 +472,10 @@ MapEntry<String, String> parseDartDefineEntry(String raw) {
 ///
 /// [fromCli] 里任意一条格式错误都会让整个调用抛 [FormatException]
 /// (见 [parseDartDefineEntry])。
-List<String> mergeDartDefines(Map<String, String> fromYaml, List<String> fromCli) {
+List<String> mergeDartDefines(
+  Map<String, String> fromYaml,
+  List<String> fromCli,
+) {
   final merged = Map<String, String>.of(fromYaml);
   for (final raw in fromCli) {
     final entry = parseDartDefineEntry(raw);
@@ -465,13 +501,16 @@ List<String> mergePrivateInfos(List<String> fromYaml, List<String> fromCli) {
   for (final v in fromCli) {
     if (!kAllowedPrivateInfos.contains(v)) {
       throw FormatException(
-          '--private-info 不支持的取值:"$v"(仅支持:${kAllowedPrivateInfos.join(', ')})');
+        '--private-info 不支持的取值:"$v"(仅支持:${kAllowedPrivateInfos.join(', ')})',
+      );
     }
     if (!merged.contains(v)) merged.add(v);
   }
   if (merged.contains('getLocation') && merged.contains('getFuzzyLocation')) {
-    throw FormatException('private_infos 不能同时包含 getLocation 与 getFuzzyLocation'
-        '(微信不允许同一小程序同时声明这两个定位接口)');
+    throw FormatException(
+      'private_infos 不能同时包含 getLocation 与 getFuzzyLocation'
+      '(微信不允许同一小程序同时声明这两个定位接口)',
+    );
   }
   return merged;
 }
