@@ -89,6 +89,24 @@ SDK(该工程 `flutter pub get` 时用的那一套);显式指定的 SDK 与这�
 12. 不做"按 App 文案做字体子集":电商类 App 的文字多由服务端动态下发,构建期子集会丢字;
     中文回退字体保持整套按需加载(或 `font_base_url` 走 CDN);常用汉字合一字体是按 GB2312 固定
     字表切的通用子集(level1 / full),不依赖 App 文案
+13. 安卓真机(微信 JS 引擎不带 ICU)不支持正则的 Unicode 属性转义 `\p{…}`/`\P{…}`(`new RegExp('\\p{L}', 'u')`
+    抛 `SyntaxError: Invalid property name`;开发者工具与 iOS 支持)。构建期会自动把 `main.dart.js`
+    里字符串常量/正则字面量中的属性转义改写成等价码点区间(Flutter `text_painter.dart` 插入文字时
+    用到两处,不改写则输入框插入文字不回显);运行时动态拼出来的含 `\p{` 的正则源码改写不到,
+    在安卓真机上照样抛异常,业务代码请避免。`--force-platform android`/`android-noIntl` 在模拟器里
+    模拟这一缺失
+14. 原生输入框的光标:iOS 用 `cursor-color="#00000000"` 隐藏(避免与 Flutter 画的光标形成双光标);
+    安卓的 `cursor-color` 只支持 `default`/`green`,CSS `caret-color`/`opacity` 都不起作用,所以安卓
+    默认把原生框水平移出可视区(`android_input: offscreen`,竖直位置不变,键盘顶起页面照常),
+    只剩 Flutter 画的光标;`android_input: overlay` 恢复叠放(会有两根光标)
+15. 安卓输入法组字(拼音)期间:微信 WebView 渲染的 `<input>` 没有组字事件(`keyboardcomposition*`
+    只在 Skyline 下有),`bindinput` 的 detail 只有 `value`/`cursor`/`keyCode`,拿不到组字中的拼音。
+    `offscreen` 模式下组字中的拼音显示在屏幕外,选字上屏后 Flutter 才显示;组字期间偶发的空 value
+    (真机日志)会被丢弃,不清掉已上屏内容——代价是真的全选删除时要等下一次按键才同步。想在组字时
+    看到拼音,用 `android_input: overlay`
+16. 安卓真机原生框失焦、键盘收起后偶发键盘自己又弹出(引擎侧没有重新聚焦、模拟器回放同一事件顺序
+    不复现,属原生侧行为):原生 blur 后 5s 内键盘升起而页面上没有聚焦中的原生框时,承载页调
+    `wx.hideKeyboard()` 收起。待真机 `--input-timing` 日志确认
 
 更细的“为什么”与实测数据见 [`docs/architecture.md`](architecture.md)。复杂
 页面(长列表、图片墙、长图文、大表单、重效果、原生组件)的真机压测数据、一

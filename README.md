@@ -5,7 +5,7 @@
 ## 三步快速开始
 
 **1. 加依赖**——仓库尚未发布到 pub.dev,以 git 依赖引入本仓库(公开仓库,无需
-额外凭证;`ref` 建议固定到一个发布 tag,例如 `v0.2.4`,而不是 `main`,避免上游
+额外凭证;`ref` 建议固定到一个发布 tag,例如 `v0.2.5`,而不是 `main`,避免上游
 后续提交影响本地构建的可复现性):
 
 ```yaml
@@ -14,7 +14,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.2.4
+      ref: v0.2.5
 ```
 
 **2. 编译**——工程根跑一条命令(先跑 `dart run mp_flutter doctor` 自检工具链
@@ -144,7 +144,7 @@ dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter_wechat
-      ref: v0.2.4
+      ref: v0.2.5
 ```
 
 ```dart

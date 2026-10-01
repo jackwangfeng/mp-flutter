@@ -21,6 +21,7 @@ import 'transform/canvaskit_wasm.dart';
 import 'transform/font_fallback.dart';
 import 'transform/main_dart_js.dart';
 import 'transform/split_main_dart_js.dart';
+import 'transform/unicode_property_escapes.dart';
 import 'version_matrix.dart';
 
 
@@ -86,9 +87,12 @@ Future<SizeReport> runPipeline({
   String bootAssets = 'auto',
   bool initialRenderingCache = true,
   bool lazyCodeLoading = true,
+  String androidInput = 'offscreen',
+  bool inputTiming = false,
 }) async {
   // 参数错误在构建前暴露,不白等一次 flutter build
-  buildHostPageJs(verify: verify, forcePlatform: forcePlatform, semanticsMirror: semanticsMirror, perfHud: perfHud);
+  buildHostPageJs(verify: verify, forcePlatform: forcePlatform, semanticsMirror: semanticsMirror, perfHud: perfHud,
+      androidInput: androidInput, inputTiming: inputTiming);
   if (!kPreloadModes.contains(preload)) {
     throw ArgumentError.value(preload, 'preload', '只能是 ${kPreloadModes.join(' / ')}');
   }
@@ -125,6 +129,7 @@ Future<SizeReport> runPipeline({
     await warnIfEsbuildVersionMismatch(esbuildBin);
   }
   final splitTool = await resolveDartSplitTool();
+  final unicodePropsTool = await resolveUnicodePropsTool();
 
   // 3. 调 flutter build web。入口换成构建期生成的包装(K1:注入小程序安全区,
   //    见 entrypoint.dart);工程形状不符合时退回 [target](缺省
@@ -214,8 +219,16 @@ Future<SizeReport> runPipeline({
   // 粗体(cjk_font_bold):调用方传的是已生效档位(CLI 用 resolveCjkBoldLevel 算好);
   // 这里只防组合不合法(与常规不同档会出豆腐块,见 cjk_font.dart)
   if (cjkFontBold != null) resolveCjkBoldLevel(cjkFont, cjkFontBold);
-  final mainJsSource = cjkFont != null ? patchFontFallback(mainJsRaw, family: kCjkFontFamily) : mainJsRaw;
-  final preambleProbe = injectPreamble('', shimPath: '../bom-shim.js');
+  final mainJsPatched = cjkFont != null ? patchFontFallback(mainJsRaw, family: kCjkFontFamily) : mainJsRaw;
+  // 正则 Unicode 属性转义 \p{…} 改写成码点区间(安卓微信 JS 引擎不带 ICU,
+  // 不支持;Flutter text_painter 插入文字时会构造,见 transform/unicode_property_escapes.dart)。
+  // 必须在分片之前:分片器只搬语句,不碰字符串内容。
+  final mainJsSource = await rewriteUnicodePropertyEscapes(mainJsPatched,
+      toolPath: unicodePropsTool,
+      onRewritten: (n, props) => stdout.writeln('正则 Unicode 属性转义改写:$n 处(${props.join(', ')})'));
+  // --force-platform android/android-noIntl:分片额外遮蔽 RegExp,复现真机不支持 \p{…}
+  final shadowRegExp = forcePlatform == 'android' || forcePlatform == 'android-noIntl';
+  final preambleProbe = injectPreamble('', shimPath: '../bom-shim.js', shadowRegExp: shadowRegExp);
   final chunkBudget = (dartChunkBudgetBytes ?? kDartChunkBudgetBytes) -
       utf8.encode(preambleProbe).length;
   final dartChunks = await splitMainDartJs(mainJsSource,
@@ -226,7 +239,7 @@ Future<SizeReport> runPipeline({
     final pkg = '$_dartPackagePrefix$i';
     dartPackages.add(pkg);
     dartModulePaths.add('$pkg/dart.js');
-    emitText('$pkg/dart.js', injectPreamble(dartChunks[i], shimPath: '../bom-shim.js'), pkg);
+    emitText('$pkg/dart.js', injectPreamble(dartChunks[i], shimPath: '../bom-shim.js', shadowRegExp: shadowRegExp), pkg);
   }
   emitText(kDartScopePath,
       '// [mp-flutter] Dart 分片共享作用域:各分片经它传递 dart2js 的顶层名。\nmodule.exports = {};\n',
@@ -283,6 +296,11 @@ Future<SizeReport> runPipeline({
   if (perfHud) {
     emitText('perf-hud.js',
         File(p.join(runtimeDir.path, 'perf-hud.js')).readAsStringSync(), 'main');
+  }
+  // input-timing.js 同理,只在 --input-timing 打开时进产物
+  if (inputTiming) {
+    emitText('input-timing.js',
+        File(p.join(runtimeDir.path, 'input-timing.js')).readAsStringSync(), 'main');
   }
 
   // 6. 资源 → base64 模块,装箱到 pkg-assets-0..N
@@ -449,6 +467,7 @@ Future<SizeReport> runPipeline({
     requireLocation: requireLocation,
     privateInfos: privateInfos,
     perfHud: perfHud,
+    inputTiming: inputTiming,
     splashTitle: splashTitle ?? _pubspecName(projectPath) ?? '',
     splashColor: splashBg,
     ignoreDirs: remoteFonts.isEmpty ? const [] : const [kRemoteFontDir],
@@ -463,7 +482,8 @@ Future<SizeReport> runPipeline({
       buildHostPageJs(verify: verify, forcePlatform: forcePlatform, semanticsMirror: semanticsMirror,
           perfHud: perfHud, shaderWarmup: shaderWarmup, shaderWarmupLight: shaderWarmupLight,
           bootStages: bootSubPackages.length + 4,
-          earlyWasm: earlyWasm, cjkFontBoldTiming: cjkFontBoldTiming),
+          earlyWasm: earlyWasm, cjkFontBoldTiming: cjkFontBoldTiming,
+          androidInput: androidInput, inputTiming: inputTiming),
       'main');
 
   // 9. flutter_ohos 已知分叉差异 → 构建期警告(是 warning 不是 error,
@@ -503,7 +523,10 @@ String? _pubspecName(String projectPath) {
 ///     (V8 独有),垫片同时遮蔽 `Intl.Segmenter`,按"两者都没有"模拟;
 ///   · `android-noIntl`:部分安卓微信的 JS 引擎整个没有 `Intl`(真机实测
 ///     `ReferenceError: Intl is not defined`),垫片把 Intl 遮蔽成不存在,平台按 android;
-///   · `android`:只覆盖平台(UA/原生组件几何),不模拟缺失能力。
+///   · `android`:覆盖平台(UA/原生组件几何);
+///   · `android` 与 `android-noIntl` 都模拟"正则不支持 Unicode 属性转义"
+///     (安卓微信 JS 引擎不带 ICU,`\p{…}` 抛 SyntaxError,见 bom-shim.js
+///     engineRegExp;构建期改写见 transform/unicode_property_escapes.dart)。
 const kForcePlatforms = ['ios', 'android', 'android-noIntl'];
 
 /// `--force-platform` 取值 → (传给 boot 的平台, 垫片要模拟的缺失能力)。
@@ -513,10 +536,20 @@ const kForcePlatforms = ['ios', 'android', 'android-noIntl'];
       return (platform: 'ios', simulate: 'ios');
     case 'android-noIntl':
       return (platform: 'android', simulate: 'android-noIntl');
+    case 'android':
+      return (platform: 'android', simulate: 'android');
     default:
       return (platform: forcePlatform, simulate: null);
   }
 }
+
+/// `android_input` / `--android-input`:安卓上原生输入框放哪。
+///   · offscreen —— 默认:水平移出可视区(竖直位置不变,键盘顶起页面照常),
+///                  只剩 Flutter 画的光标与文字(安卓原生光标设不成透明);
+///   · overlay —— 与 iOS 一样透明叠在 TextField 上(安卓会有两根光标)。
+/// iOS 始终 overlay。平台取 wx.getSystemInfoSync().platform;--force-platform
+/// 构建按模拟的平台。
+const kAndroidInputModes = ['offscreen', 'overlay'];
 
 /// 生成承载页 `pages/flutter/flutter.js`。
 ///
@@ -533,6 +566,9 @@ const kForcePlatforms = ['ios', 'android', 'android-noIntl'];
 ///
 /// [earlyWasm]/[cjkFontBoldTiming]:冷启动开关 `early_wasm`/`cjk_font_bold_timing`,
 /// 原样传给 boot()(见 boot.js)。
+///
+/// [androidInput]:见 [kAndroidInputModes]。[inputTiming]:`--input-timing`
+/// 计时诊断(见 runtime/input-timing.js),关闭时不注入任何相关代码。
 String buildHostPageJs({
   required bool verify,
   String? forcePlatform,
@@ -543,7 +579,13 @@ String buildHostPageJs({
   int bootStages = 8,
   bool earlyWasm = true,
   String cjkFontBoldTiming = 'after_first_frame',
+  String androidInput = 'offscreen',
+  bool inputTiming = false,
 }) {
+  if (!kAndroidInputModes.contains(androidInput)) {
+    throw ArgumentError.value(androidInput, 'androidInput', '只能是 ${kAndroidInputModes.join(' / ')}');
+  }
+  final t = inputTiming;
   if (forcePlatform != null) {
     if (!verify) {
       throw ArgumentError.value(forcePlatform, 'forcePlatform', '只能与 --verify 同用');
@@ -615,12 +657,17 @@ Page({
     // M6 修复:开始触摸画布很可能紧接着有文本框几何/焦点变化(点击切换输入
     // 框、拖动滚动等),轮询若已退避到 IDLE_POLL_MS,主动唤醒。
     if (e.type === 'touchstart' && this.mpText) this.mpText.wake();
-    if (this.mpTouch) this.mpTouch.handle(e);
+${t ? "    if (this.mpT && (e.type === 'touchstart' || e.type === 'touchend')) this.mpT.touch(e);\n" : ''}    if (this.mpTouch) this.mpTouch.handle(e);
   },
   onMpInput(e) {
-    if (this.mpView) this.mpView.nativeInput(e.detail.value);
-    if (this.mpText) this.mpText.nativeInput({ value: e.detail.value, cursor: e.detail.cursor });
-  },
+    // 不 return 任何值:bindinput 的处理函数返回字符串会被微信当作新内容替换原生框
+    const d = (e && e.detail) || {};
+${t ? "    if (this.mpT) this.mpT.nativeInput(e);\n    const tIn = Date.now();\n" : ''}    // 桥先判断(安卓组字期间的可疑空值会被丢弃,见 text-bridge.js isSpuriousEmpty),
+    // 接受了才记进视图同步
+    const ok = this.mpText ? this.mpText.nativeInput({ value: d.value, cursor: d.cursor, keyCode: d.keyCode }) : false;
+    if (ok !== false && this.mpView) this.mpView.nativeInput(d.value, d.cursor);
+${t ? "    if (this.mpT) this.mpT.engineIn(tIn, ok);\n" : ''}  },
+${t ? "  onMpFocus(e) { if (this.mpT) this.mpT.nativeFocus(e); },\n" : ''}
   onMpConfirm() { if (this.mpText) this.mpText.nativeConfirm(); },
   onMpNativeEvent(e) {
     // 微信原生组件(video/map/camera)的事件对象没有 e.currentTarget.dataset
@@ -629,11 +676,23 @@ Page({
     const ds = (e && e.currentTarget && e.currentTarget.dataset) || {};
     if (this.mpNative) this.mpNative.dispatchEvent(ds.mpid, e.type, e.detail);
   },
+  // 键盘重弹兜底(安卓真机:原生框失焦、键盘收起后约 1.3s 键盘又弹出,3.7s 后才收起;
+  // 期间引擎没有重新聚焦、没有下发任何状态——模拟器按同一顺序回放一个真实电商小程序的搜索页也没有
+  // JS 侧的重新聚焦,是原生侧在没有聚焦输入框时拉起了键盘)。原生 blur 之后 5s 内
+  // 键盘升起、而页面上并没有聚焦中的原生框时,这个键盘输入不到任何地方,收起它。
+  mpKbGhost(res) {
+    const h = res && res.height;
+    if (!(h > 0) || !(Date.now() < (this.mpKbGuardUntil || 0))) return;
+    const d = this.data.mpInput || {};
+    if (d.visible && d.focus) return;
+    try { if (wx.hideKeyboard) wx.hideKeyboard({}); } catch (e) { /* 旧基础库忽略 */ }
+${t ? "    if (this.mpT) this.mpT.note('kb-ghost-hidden', 'h=' + h);\n" : ''}  },
   onMpBlur(e) {
+    this.mpKbGuardUntil = Date.now() + 5000;
     // 只转发当前会话原生框的 blur:焦点 A→B 时被销毁的 A 框的 blur 可能晚于 B 聚焦
     // 才到,转发会让 B 立刻失焦(会话比对在桥里做)
     const ds = (e && e.currentTarget && e.currentTarget.dataset) || {};
-    if (this.mpText) this.mpText.nativeBlur(ds.session);
+${t ? "    if (this.mpT) this.mpT.nativeBlur(e);\n" : ''}    if (this.mpText) this.mpText.nativeBlur(ds.session);
   },
   onHide() {
     // 切到后台时所有正在按住的手指状态必然丢失(不会再收到 touchend/
@@ -655,7 +714,7 @@ Page({
     if (this.mpNative) { this.mpNative.stop(); this.mpNative = null; }
     if (this.mpSemantics) { this.mpSemantics.stop(); this.mpSemantics = null; }
     if (this.mpPerf) { this.mpPerf.stop(); this.mpPerf = null; }
-  },
+${t ? "    if (this.mpT) { this.mpT.stop(); this.mpT = null; }\n" : ''}  },
   onShareAppMessage() {
     // 分享信息由业务代码经 self.__mpWechat.setShareInfo(json) 设置(见 wechat.js);
     // 未设置时不给 title,让微信用小程序名兜底(与直接返回 {} 的默认行为一致)。
@@ -703,20 +762,29 @@ ${verify ? _consoleStateBufferSnippet : ''}
           } catch (e) { this.fail('触摸桥初始化失败: ' + ((e && e.message) || e)); }
           try {
             const { createTextBridge, createViewSync } = require('../../text-bridge.js');
-            // 视图同步负责"推送值等于页面旧数据时也要真正生效"(见 createViewSync)
-            this.mpView = createViewSync((patch, cb) => this.setData(patch, cb)${perfHud ? _perfHudTextSetData : ''});
+${t ? _inputTimingInitSnippet : ''}            // 视图同步负责"推送值等于页面旧数据时也要真正生效"(见 createViewSync)
+            this.mpView = createViewSync(${t ? _inputTimingSetData : '(patch, cb) => this.setData(patch, cb)'}${perfHud ? _perfHudTextSetData : ''});
+            // 平台:--force-platform 构建按模拟的平台,否则取真机平台。安卓:原生框
+            // 放屏幕外(android_input,见 kAndroidInputModes),并丢弃组字期间的
+            // 可疑空值(见 text-bridge.js 文件头)
+            const mpPlat = ${forced == null ? "(() => { try { return wx.getSystemInfoSync().platform; } catch (e) { return ''; } })()" : jsonEncode(forced.platform)};
             // passwordFocus:boot.js 在 loadDart 之前就挂了同一个对象(I1 修复,
             // 见 text-bridge.js createPasswordFocusBridge 的注释),这里接过来
             // 在聚焦/失焦密码框时通知入口包装
             this.mpText = createTextBridge({ shim: r.shim, cssWidth: info.windowWidth,
               passwordFocus: r.shim.passwordFocus,
-              onState: (s) => this.mpView.apply(s)${perfHud ? ',\n              onStats: (ms) => { if (this.mpPerf) this.mpPerf.note(\'tb\', ms); }' : ''} });
+              offscreen: ${androidInput == 'offscreen' ? "mpPlat === 'android'" : 'false'},
+              guardEmpty: mpPlat === 'android',
+              onState: (s) => { ${t ? 'if (this.mpT) this.mpT.state(s); ' : ''}this.mpView.apply(s); }${t ? ",\n              onIgnored: (prev, ev) => { if (this.mpT) this.mpT.ignored(prev, ev); }" : ''}${perfHud ? ',\n              onStats: (ms) => { if (this.mpPerf) this.mpPerf.note(\'tb\', ms); }' : ''} });
             // M6 修复:键盘高度变化很可能紧接着有文本框几何/焦点变化,轮询若
             // 已退避到 IDLE_POLL_MS,主动唤醒避免窄窗口里同步滞后(见文件头
             // IDLE_POLL_MS 注释)。旧基础库没有 onKeyboardHeightChange 时忽略。
             try {
               if (wx.onKeyboardHeightChange) {
-                wx.onKeyboardHeightChange(() => { if (this.mpText) this.mpText.wake(); });
+                wx.onKeyboardHeightChange((res) => {
+                  ${t ? 'if (this.mpT) this.mpT.keyboard(res); ' : ''}if (this.mpText) this.mpText.wake();
+                  this.mpKbGhost(res);
+                });
               }
             } catch (e) { /* 旧基础库忽略 */ }
           } catch (e) { this.fail('文本输入桥初始化失败: ' + ((e && e.message) || e)); }
@@ -797,6 +865,21 @@ const _perfHudBootTimerSnippet = '''
         catch (e) { console.error('[mp-perf] 分包时间线初始化失败: ' + ((e && e.message) || e)); }
       } catch (e) { console.error('[mp-perf] 启动计时初始化失败: ' + ((e && e.message) || e)); }
 ''';
+
+/// --input-timing(默认关):文本桥创建之前建计时器(先于文本桥订阅引擎焦点
+/// 变化,日志里 engine-focus 排在 state 之前)。失败只 console.error。
+const _inputTimingInitSnippet = '''
+            try {
+              const { createInputTiming } = require('../../input-timing.js');
+              this.mpT = createInputTiming({ shim: r.shim, CK: r.CK,
+                raf: (cb) => canvas.requestAnimationFrame(cb) });
+            } catch (e) { console.error('[mp-t] 初始化失败: ' + ((e && e.message) || e)); }
+''';
+
+/// --input-timing:文本桥 setData 打 setData / setData-sync / setData-done 三行。
+const _inputTimingSetData =
+    '(patch, cb) => { const tm = this.mpT ? this.mpT.setData(patch) : null; '
+    'this.setData(patch, () => { if (tm) tm.done(); if (cb) cb(); }); if (tm) tm.sent(); }';
 
 /// --perf-hud(默认关):文本桥的 setData 计时——同步部分(序列化 + 投递给视图层)
 /// 的耗时与负载字节数进帧明细(`tb=`、`setData=次数/字节`),拆"聚焦卡顿"用。

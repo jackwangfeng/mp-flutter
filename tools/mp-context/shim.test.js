@@ -539,3 +539,33 @@ test('宿主没有 queueMicrotask / BigInt64Array:install 不抛,queueMicrotask 
   });
   assert.deepStrictEqual(order, ['micro', 'timeout']);
 });
+
+test('simulate=android / android-noIntl:RegExp 包装对 u 标志下的 \\p{…} 抛与真机同样的 SyntaxError', () => {
+  for (const simulate of ['android', 'android-noIntl']) {
+    const c = createMpContext();
+    const mod = c.requireModule(SHIM);
+    mod.install({ canvas: c.canvas, width: 366, height: 249, dpr: 3, simulate });
+    const R = mod.RegExp;
+    assert.notStrictEqual(R, c.run('RegExp'));
+    assert.throws(() => new R('\\p{Space_Separator}', 'u'),
+      (e) => e.name === 'SyntaxError' &&
+        e.message === 'Invalid regular expression: /\\p{Space_Separator}/u: Invalid property name');
+    assert.throws(() => R('[\\P{L}]', 'gu'), /Invalid property name/);
+    // 不带 u、字面反斜杠、改写后的码点区间:照常可用,instanceof 不受影响
+    assert.ok(new R('\\p{L}').test('p{L}'));
+    assert.ok(new R('\\\\p{L}', '').test('\\p{L}'));
+    const re = new R('[\\u{20}\\u{3000}]', 'u');
+    assert.ok(re.test('　'));
+    assert.ok(re instanceof R);
+  }
+});
+
+test('不模拟(stable / ios):导出的 RegExp 就是原生构造函数', () => {
+  for (const simulate of [undefined, 'ios']) {
+    const c = createMpContext();
+    const mod = c.requireModule(SHIM);
+    mod.install({ canvas: c.canvas, width: 366, height: 249, dpr: 3, simulate });
+    assert.strictEqual(mod.RegExp, c.run('RegExp'));
+    assert.ok(new mod.RegExp('\\p{L}', 'u').test('a'));
+  }
+});

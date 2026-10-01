@@ -12,7 +12,8 @@
  * - 几何只取 transform 的平移分量。TextField 位于缩放/旋转的父组件下时,原生框的
  *   尺寸与字号不准,影响触摸命中范围与输入法候选框的锚点位置。
  * - 透明原生框在聚焦期间覆盖 TextField 区域,框内的触摸由原生框消费、到不了画布,
- *   所以框内点击挪光标、长按选词不可用(光标位置以原生框为准)。
+ *   所以框内点击挪光标、长按选词不可用(光标位置以原生框为准)。安卓屏幕外模式(见下)
+ *   没有这条限制。
  *
  * ## I1 修复:密码框聚焦/失焦时通知 Dart 侧(见 entrypoint.dart
  * `_steadyCursorOnIOS` 的注释、本文件 `createPasswordFocusBridge`)
@@ -60,8 +61,48 @@
  * CSS `transform: scale(...)` 是对整棵子树生效的,后代自己写的像素尺寸在
  * 视觉上也会被这个缩放影响,`el.style.width/height` 与语义 rect 一样是
  * 物理像素。
+ *
+ * ## 安卓"屏幕外"原生框(`android_input: offscreen`,默认)
+ *
+ * 安卓的原生光标设不成透明(cursor-color 只认 default/green,CSS caret-color、
+ * opacity 都不起作用),原生框叠在 TextField 上会出现两根光标,且两套字体排版
+ * 不同,越打越偏。`opts.offscreen` 为真时原生框水平移出可视区(left 固定为
+ * [OFFSCREEN_LEFT],top/宽/高照常跟随,键盘 adjust-position 推页面仍按真实
+ * 竖直位置算),光标与文字只剩 Flutter 画的那一份;TextField 区域的点击因此
+ * 落到画布上,Flutter 自己挪光标,再经 `cursor` 推给原生框。
+ *
+ * ## 输入期间少发 setData(按字段 diff)
+ *
+ * 状态里 `value`/`cursor` 只在引擎侧与原生侧已知值不同时才出现(引擎主动改值、
+ * 程序化挪光标);用户正常打字时原生框自己的 value/光标就是最新的,状态里没有
+ * 这两项,其余字段没变 → [createViewSync] 一个字段都不发。
+ *
+ * ## 安卓输入法组字期间的空值(`opts.guardEmpty`)
+ *
+ * 真机日志:安卓搜索框拼音组字期间 bindinput 多次给出 value 为空字符串,照转
+ * 会把已上屏的内容清掉。微信 WebView 渲染的 input 没有组字事件
+ * (keyboardcomposition* 仅 Skyline),bindinput 的 detail 只有
+ * value/cursor/keyCode。只丢弃"非退格键把非空值变成空"的事件(见 [isSpuriousEmpty]);
+ * 退格(keyCode 8)和没有 keyCode 的事件一律照转。
  */
 const POLL_MS = 16;
+/** 安卓屏幕外模式原生框的 left(CSS px)。真机验证 -2000 可用;更宽的框再往左挪。 */
+const OFFSCREEN_LEFT = -2000;
+function offscreenLeft(width) { return Math.min(OFFSCREEN_LEFT, -(width + 100)); }
+
+/**
+ * 安卓组字期间 bindinput 可能给出空 value(真机日志)。[prev] 是原生框此前已知的
+ * 值,[keyCode] 是 detail.keyCode(可能没有)。可疑:一次事件从 ≥2 个字符直接变空
+ * (退格一次只删一个字符);或从 1 个字符变空但带了 keyCode 且不是退格(8)。
+ */
+function isSpuriousEmpty(prev, keyCode) {
+  // 真机复测(2026-10-01):输入法上屏「哈哈」后按退格,bindinput 直接给 value=""、
+  // keyCode=8(整词删除)。退格与没有 keyCode 的事件一律照转——早先"≥2 个字符直接
+  // 变空即丢弃"的规则会让这种退格永远删不掉。只丢弃"非退格键却把非空值变成空"。
+  const p = String(prev == null ? '' : prev);
+  if (keyCode == null || Number(keyCode) === 8) return false;
+  return p.length > 0;
+}
 /**
  * 聚焦后几何/值一直没变时的轮询间隔。每次轮询都要读样式、算几何、序列化比较,
  * 16ms 一次在无 JIT 的 iOS 上是持续的主线程占用(模拟器实测聚焦期间约 6.5ms/s,
@@ -199,6 +240,8 @@ function createTextBridge(opts) {
   let el = null;            // 当前被引擎聚焦的输入元素
   let lastNative = null;    // 上次从原生收到的值
   let pushed = null;        // 自上次原生输入以来推给原生的值(null = 没推过)
+  let lastNativeCursor = null; // 上次从原生收到的光标
+  let pushedCursor = null;  // 自上次原生输入以来推给原生的光标(null = 没推过)
   let lastSent = '';        // 上次发给页面的序列化状态
   let timer = null;
   let lastActive = 0;       // 最近一次有变化(发出状态 / 原生输入 / 新聚焦)的时间
@@ -221,6 +264,7 @@ function createTextBridge(opts) {
     if (geo.y < -1000 || geo.x < -1000) return { visible: false, focus: false };
     const font = /(\d+(?:\.\d+)?)px/.exec(String(st.font || st.fontSize || ''));
     const kind = inputKind(el);
+    const width = (px(st.width) * geo.scale) / scale;
     const state = {
       visible: true,
       focus: true,
@@ -229,22 +273,30 @@ function createTextBridge(opts) {
       type: kind.type,
       password: kind.password,
       confirmType: confirmTypeOf(el),
-      left: geo.x / scale,
+      left: opts.offscreen ? offscreenLeft(width) : geo.x / scale,
       top: geo.y / scale,
-      width: (px(st.width) * geo.scale) / scale,
+      width: width,
       height: (px(st.height) * geo.scale) / scale,
       fontSize: font ? Number(font[1]) / scale : 16,
-      cursor: el.selectionEnd,
     };
     // 只在引擎侧值与原生侧当前值不同时推 value,避免打断输入法组字。原生侧当前值
     // 是上次从原生收到的值,推过之后就是推过去的值(否则"清空后又改回原值"推不出去)。
+    // 光标同理:用户打字时原生光标就是最新的,不回写;引擎挪了光标(点画布、
+    // 程序化 selection)或推了值才带 cursor。
     const nativeHas = pushed !== null ? pushed : lastNative;
-    if (el.value !== nativeHas) { state.value = el.value; pushed = el.value; }
+    const cur = el.selectionEnd;
+    if (el.value !== nativeHas) {
+      state.value = el.value; pushed = el.value;
+      state.cursor = cur; pushedCursor = cur;
+    } else {
+      const nativeCur = pushedCursor !== null ? pushedCursor : lastNativeCursor;
+      if (cur !== nativeCur) { state.cursor = cur; pushedCursor = cur; }
+    }
     return state;
   }
 
-  // 去重按"除 value 外的字段"比较:value 只在推送的那一个状态里出现,下一个 tick
-  // 它消失并不代表有变化,不应再发一次状态(页面侧 value 缺省即"不动原生值")。
+  // 去重按"除 value/cursor 外的字段"比较:这两项只在推送的那一个状态里出现,下一个
+  // tick 它们消失并不代表有变化,不应再发一次状态(页面侧缺省即"不动原生值/光标")。
   function tick() {
     if (opts.onStats) {
       const t0 = Date.now();
@@ -258,8 +310,9 @@ function createTextBridge(opts) {
     const s = compute();
     const rest = Object.assign({}, s);
     delete rest.value;
+    delete rest.cursor;
     const key = JSON.stringify(rest);
-    if (key !== lastSent || 'value' in s) { lastSent = key; lastActive = Date.now(); opts.onState(s); }
+    if (key !== lastSent || 'value' in s || 'cursor' in s) { lastSent = key; lastActive = Date.now(); opts.onState(s); }
   }
 
   // setTimeout 链(不是 setInterval):间隔随活跃程度变,见 IDLE_POLL_MS
@@ -282,7 +335,10 @@ function createTextBridge(opts) {
     if (timer && !paused && el) { clearTimeout(timer); timer = setTimeout(loop, POLL_MS); }
   }
   function attach(n) {
-    el = n; session++; lastNative = null; pushed = null;
+    // 同一元素重新聚焦(点画布时引擎 handleBlur 立刻把焦点抢回输入元素)不算新会话:
+    // 原生框不重建,也不重推 value/cursor
+    if (n === el) { start(); return; }
+    el = n; session++; lastNative = null; pushed = null; lastNativeCursor = null; pushedCursor = null;
     // I1 修复:聚焦元素是否 password:true 的密码框,报给 Dart 侧(见
     // createPasswordFocusBridge 文档)
     if (opts.passwordFocus) opts.passwordFocus.set(inputKind(n).password);
@@ -298,16 +354,31 @@ function createTextBridge(opts) {
   if (isEditable(shim.document.activeElement)) attach(shim.document.activeElement);
 
   return {
+    /**
+     * 原生 bindinput → 引擎元素。返回 false 表示这次输入被丢弃(没有聚焦元素,或
+     * `guardEmpty` 判定为组字期间的可疑空值,见 [isSpuriousEmpty]),调用方不要再
+     * 把它记进视图同步。
+     */
     nativeInput(ev) {
-      if (!el) return;
+      if (!el) return false;
       const value = String(ev.value == null ? '' : ev.value);
-      const cursor = ev.cursor == null ? value.length : ev.cursor;
+      if (value === '' && opts.guardEmpty) {
+        const prev = pushed !== null ? pushed : (lastNative !== null ? lastNative : el.value);
+        if (isSpuriousEmpty(prev, ev.keyCode)) {
+          if (opts.onIgnored) { try { opts.onIgnored(prev, ev); } catch (e) { /* 诊断失败不影响输入 */ } }
+          return false;
+        }
+      }
+      const cursor = ev.cursor == null ? value.length : Number(ev.cursor);
       lastNative = value;
       pushed = null;
+      lastNativeCursor = Math.min(cursor, value.length);
+      pushedCursor = null;
       wake();
       el.value = value;
       el.setSelectionRange(cursor, cursor);
       el.dispatchEvent(new shim.window.Event('input', { bubbles: true }));
+      return true;
     },
     nativeConfirm() {
       if (!el) return;
@@ -353,11 +424,14 @@ function createTextBridge(opts) {
 /**
  * 桥状态 → 承载页 setData。
  *
- * 用户输入时页面数据里的 mpInput.value 不跟着变(每次按键都 setData 回写会打断
- * 输入法),所以页面数据可能停在上次推送的旧值上。此时若引擎要推的值恰好等于这个
+ * 按字段 diff:只发与页面数据现值不同的字段,一个都没变就不调 setData(几何、
+ * 焦点不变时打字不产生任何 setData)。
+ *
+ * 用户输入时页面数据里的 mpInput.value/cursor 不跟着变(每次按键都 setData 回写会
+ * 打断输入法),所以页面数据可能停在上次推送的旧值上。此时若引擎要推的值恰好等于这个
  * 旧值(典型:首次聚焦推 '',用户输入后引擎 controller.clear() 又推 ''),视图层
  * diff 可能认为没变化、不更新组件,原生框仍显示旧文本。办法:这种情况下先写一次
- * 原生侧当前值(对原生框是空操作,但让页面数据变了),在回调里再写目标值。
+ * 原生侧当前值(对原生框是空操作,但让页面数据变了),在回调里再写目标值。光标同理。
  * @param setData (patch, cb?) => void,即 page.setData
  */
 function createViewSync(rawSetData, onSetData) {
@@ -367,51 +441,86 @@ function createViewSync(rawSetData, onSetData) {
     rawSetData(patch, cb);
     try { onSetData(patch, Date.now() - t0); } catch (e) { /* 忽略 */ }
   };
-  let viewValue;     // 页面数据里实际的 mpInput.value
+  const sent = Object.create(null); // 字段 → 页面数据里 mpInput.<字段> 的现值
   let nativeValue;   // 原生框当前实际显示的值(用户输入上报 / 真正落地的写入)
+  let nativeCursor;  // 原生框当前实际的光标(同上)
   let cursor;        // 最近一次状态里的 cursor(第二步写沿用最新值,不回滚光标)
   // 只有可能与待写目标冲突的事件才递增:带 value 的 apply、真实的原生输入。
   // 不带 value 的心跳态(光标/几何变化)不冲突,不得使待写的第二步失效。
   let seq = 0;
+  function put(patch, k, v) {
+    if (k in sent && sent[k] === v) return;
+    sent[k] = v;
+    patch['mpInput.' + k] = v;
+  }
+  function isEmpty(o) { for (const k in o) return false; return true; }
   return {
-    nativeInput(v) { seq++; nativeValue = String(v == null ? '' : v); },
+    nativeInput(v, c) {
+      seq++;
+      nativeValue = String(v == null ? '' : v);
+      nativeCursor = c == null ? nativeValue.length : Math.min(Number(c), nativeValue.length);
+    },
     apply(s) {
       if ('cursor' in s) cursor = s.cursor;
-      const patch = { 'mpInput.visible': s.visible };
-      Object.keys(s).forEach((k) => { if (k !== 'visible' && k !== 'value') patch['mpInput.' + k] = s[k]; });
+      const patch = {};
+      put(patch, 'visible', s.visible);
+      Object.keys(s).forEach((k) => { if (k !== 'visible' && k !== 'value' && k !== 'cursor') put(patch, k, s[k]); });
       if (!s.visible) {
-        // wx:if 销毁原生框;下次显示时按页面数据重建,原生值即页面数据
-        nativeValue = viewValue;
-        setData(patch);
+        // wx:if 销毁原生框;下次显示时按页面数据重建,原生值/光标即页面数据
+        nativeValue = sent.value;
+        nativeCursor = sent.cursor;
+        if (!isEmpty(patch)) setData(patch);
         return;
       }
+      const mine = 'value' in s ? ++seq : seq;
+      const later = {};     // 第二步(回调里)要写的字段
+      let hasLater = false;
       // value 缺省表示"原生侧已是最新",不覆盖(避免打断输入法)
-      if (!('value' in s)) { setData(patch); return; }
-      const mine = ++seq;
-      const target = s.value;
-      if (target === viewValue && nativeValue !== undefined && nativeValue !== target) {
-        patch['mpInput.value'] = nativeValue;
-        viewValue = nativeValue;
-        setData(patch, () => {
-          // 期间有新的带 value 的 apply 或原生输入:目标已过期,放弃(否则会回滚新输入)。
-          // 放弃时 nativeValue 保持由那次事件给出的真实值,不留下"以为已推送"的状态
-          if (mine !== seq) return;
-          const p2 = { 'mpInput.value': target };
-          if (cursor !== undefined) p2['mpInput.cursor'] = cursor;
-          viewValue = target;
+      if ('value' in s) {
+        const target = s.value;
+        if (target === sent.value && nativeValue !== undefined && nativeValue !== target) {
+          sent.value = nativeValue;
+          patch['mpInput.value'] = nativeValue;
+          later.value = target; hasLater = true;
+        } else {
+          put(patch, 'value', target);
+          nativeValue = target;
+        }
+      }
+      if (('cursor' in s || 'value' in later) && cursor !== undefined) {
+        if (cursor === sent.cursor && nativeCursor !== undefined && nativeCursor !== cursor) {
+          sent.cursor = nativeCursor;
+          patch['mpInput.cursor'] = nativeCursor;
+          later.cursor = true; hasLater = true;
+        } else if ('value' in later) {
+          later.cursor = true;
+        } else {
+          put(patch, 'cursor', cursor);
+          nativeCursor = cursor;
+        }
+      }
+      if (!hasLater) { if (!isEmpty(patch)) setData(patch); return; }
+      setData(patch, () => {
+        // 期间有新的带 value 的 apply 或原生输入:目标已过期,放弃(否则会回滚新输入)。
+        // 放弃时 nativeValue 保持由那次事件给出的真实值,不留下"以为已推送"的状态
+        if (mine !== seq) return;
+        const p2 = {};
+        if ('value' in later) {
+          p2['mpInput.value'] = later.value;
+          sent.value = later.value;
           // nativeValue 只在第二步真正写出时才更新;若此刻原生框已被 wx:if 销毁,
           // 重建时取页面数据,同样等于 target
-          nativeValue = target;
-          setData(p2);
-        });
-      } else {
-        patch['mpInput.value'] = target;
-        setData(patch);
-        viewValue = target;
-        nativeValue = target;
-      }
+          nativeValue = later.value;
+        }
+        if (later.cursor && cursor !== undefined) {
+          p2['mpInput.cursor'] = cursor;
+          sent.cursor = cursor;
+          nativeCursor = cursor;
+        }
+        setData(p2);
+      });
     },
   };
 }
 
-module.exports = { createTextBridge, createViewSync, createPasswordFocusBridge };
+module.exports = { createTextBridge, createViewSync, createPasswordFocusBridge, isSpuriousEmpty };

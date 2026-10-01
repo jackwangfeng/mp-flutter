@@ -580,3 +580,151 @@ test('轮询自适应:聚焦后 500ms 内没有变化,轮询从 16ms 退到 100m
   assert.ok(ticks >= 6, '原生输入后回到逐帧轮询,实际 ' + ticks);
   bridge.dispose();
 });
+
+// ---- 输入跟手:按字段 diff、输入期间不回写 value/cursor、安卓屏幕外、组字空值 ----
+function recView() {
+  const view = { data: {}, native: '', calls: [] };
+  view.setData = (patch, cb) => {
+    view.calls.push(Object.keys(patch));
+    Object.keys(patch).forEach((k) => {
+      if (view.data[k] === patch[k]) return;
+      view.data[k] = patch[k];
+      if (k === 'mpInput.value') view.native = patch[k];
+    });
+    if (cb) setTimeout(cb, 0);
+  };
+  return view;
+}
+
+test('打字期间(几何/焦点不变)一次 setData 都不发,状态里不带 value/cursor', async () => {
+  const c = createMpContext();
+  const { createViewSync } = c.requireModule(path.join(RT, 'text-bridge.js'));
+  const view = recView();
+  const sync = createViewSync(view.setData);
+  const { bridge, engineInput, states } = setup({ onState: (s) => { states.push(s); sync.apply(s); } });
+  const { el } = engineInput();
+  el.focus();
+  await new Promise((r) => setTimeout(r, 40));
+  assert.strictEqual(view.calls.length, 1, '聚焦时整份发一次');
+  assert.strictEqual(view.data['mpInput.cursor'], 0);
+  const n = states.length;
+  for (const v of ['h', 'he', 'hel', 'hell', 'hello']) {
+    sync.nativeInput(v, v.length);
+    bridge.nativeInput({ value: v, cursor: v.length });
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  bridge.dispose();
+  assert.strictEqual(view.calls.length, 1, '打字不应触发 setData,实际 ' + JSON.stringify(view.calls));
+  assert.strictEqual(states.slice(n).filter((s) => 'value' in s || 'cursor' in s).length, 0);
+});
+
+test('按字段 diff:只发变化的字段;同一状态再来一次不调 setData', () => {
+  const c = createMpContext();
+  const { createViewSync } = c.requireModule(path.join(RT, 'text-bridge.js'));
+  const view = recView();
+  const sync = createViewSync(view.setData);
+  const s = { visible: true, focus: true, session: 1, multiline: false, type: 'text', password: false,
+    confirmType: 'done', left: 16, top: 28, width: 358, height: 24, fontSize: 16, cursor: 0, value: '' };
+  sync.apply(s);
+  assert.strictEqual(view.calls[0].length, 14, "13 个字段 + value");
+  const rest = Object.assign({}, s); delete rest.value; delete rest.cursor;
+  sync.apply(rest);
+  assert.strictEqual(view.calls.length, 1);
+  sync.apply(Object.assign({}, rest, { top: 40 }));
+  assert.deepStrictEqual(view.calls[1], ['mpInput.top']);
+  sync.apply({ visible: false, focus: false });
+  assert.deepStrictEqual(view.calls[2].sort(), ['mpInput.focus', 'mpInput.visible']);
+});
+
+test('引擎挪光标(值不变)才推 cursor;页面数据里光标已是目标值而原生光标不同时两步写', async () => {
+  const c = createMpContext();
+  const { createViewSync } = c.requireModule(path.join(RT, 'text-bridge.js'));
+  const view = recView();
+  view.cursor = 0;
+  const sync = createViewSync((patch, cb) => {
+    if ('mpInput.cursor' in patch && view.data['mpInput.cursor'] !== patch['mpInput.cursor']) view.cursor = patch['mpInput.cursor'];
+    view.setData(patch, cb);
+  });
+  const { bridge, engineInput, last } = setup({ onState: (s) => sync.apply(s) });
+  const { el } = engineInput();
+  el.focus();
+  await new Promise((r) => setTimeout(r, 30));
+  sync.nativeInput('hello', 5); view.cursor = 5;
+  bridge.nativeInput({ value: 'hello', cursor: 5 });
+  await new Promise((r) => setTimeout(r, 30));
+  el.setSelectionRange(0, 0);              // 用户点画布把光标挪到开头(页面数据里 cursor 仍是 0)
+  await new Promise((r) => setTimeout(r, 40));
+  bridge.dispose();
+  assert.strictEqual(view.cursor, 0, '原生光标应被挪到 0');
+  assert.strictEqual(view.calls.filter((k) => k.indexOf('mpInput.value') >= 0).length, 1, '值未变,只有首次聚焦写过 value');
+});
+
+test('android 屏幕外:left 移出可视区,top/宽/高照常;textarea 同样', async () => {
+  const { bridge, engineInput, last } = setup({ offscreen: true });
+  const a = engineInput();
+  a.el.focus();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepStrictEqual([last().left, last().top, last().width, last().height], [-2000, 120, 342, 24]);
+  a.el.style.setProperty('transform', 'matrix3d(1,0,0,0,0,1,0,0,0,0,1,0,40,300,0,1)');
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepStrictEqual([last().left, last().top], [-2000, 300]);
+  const b = engineInput('textarea');
+  b.el.style.setProperty('width', '3000px');
+  b.el.focus();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.strictEqual(last().multiline, true);
+  assert.ok(last().left + last().width < 0, '宽框也要整个在屏幕外');
+  bridge.dispose();
+});
+
+test('guardEmpty:退格(keyCode 8)整词删到空照常转发——真机「哈哈」退格删不掉的回归', async () => {
+  const { bridge, engineInput } = setup({ guardEmpty: true });
+  const { el } = engineInput();
+  el.focus();
+  assert.strictEqual(bridge.nativeInput({ value: '哈哈', cursor: 2, keyCode: 21704 }), true);
+  assert.strictEqual(bridge.nativeInput({ value: '', cursor: 0, keyCode: 8 }), true, '退格把 2 个字符删成空必须照转');
+  assert.strictEqual(el.value, '');
+  bridge.dispose();
+});
+
+test('guardEmpty:没有 keyCode 的空值照转;只有非退格键把非空变空才丢弃', async () => {
+  const { bridge, engineInput } = setup({ guardEmpty: true });
+  const { el, events } = engineInput();
+  el.focus();
+  assert.strictEqual(bridge.nativeInput({ value: '你好', cursor: 2 }), true);
+  assert.strictEqual(bridge.nativeInput({ value: '', cursor: 0, keyCode: 229 }), false, '非退格键把非空变空可疑');
+  assert.strictEqual(el.value, '你好');
+  assert.strictEqual(bridge.nativeInput({ value: '', cursor: 0 }), true, '无 keyCode 照转(全选删除等)');
+  assert.strictEqual(el.value, '');
+  assert.strictEqual(events.filter((e) => e === 'input').length, 2);
+  bridge.dispose();
+});
+
+test('不开 guardEmpty(iOS)时空值照常转发', () => {
+  const { bridge, engineInput } = setup();
+  const { el } = engineInput();
+  el.focus();
+  bridge.nativeInput({ value: 'hello', cursor: 5 });
+  assert.strictEqual(bridge.nativeInput({ value: '', cursor: 0 }), true);
+  assert.strictEqual(el.value, '');
+  bridge.dispose();
+});
+
+test('嵌套焦点切换:blur 监听器同步把焦点抢回输入元素(引擎 handleBlur),桥保持显示', async () => {
+  const { shim, bridge, engineInput, last } = setup();
+  const { el } = engineInput();
+  const view = shim.document.createElement('flutter-view');
+  shim.document.body.append(view);
+  const seen = [];
+  const off = shim.onFocusChange((n) => seen.push(n ? String(n.tagName).toLowerCase() : null));
+  el.focus();
+  await new Promise((r) => setTimeout(r, 30));
+  el.addEventListener('blur', (e) => { if (e.relatedTarget === view) el.focus(); });
+  view.focus();                                  // 点画布:浏览器把焦点给 flutter-view(tabindex=0)
+  await new Promise((r) => setTimeout(r, 30));
+  off();
+  assert.strictEqual(shim.document.activeElement, el);
+  assert.deepStrictEqual(seen, ['input', 'input'], '外层过期的 flutter-view 通知不应发出');
+  assert.strictEqual(last().visible, true);
+  bridge.dispose();
+});

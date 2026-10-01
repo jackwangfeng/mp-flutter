@@ -524,4 +524,20 @@ private_infos: [notARealApi]
       expect(() => load('early_wasm: yes please\n'), throwsA(isA<ConfigParseFailure>()));
     });
   });
+
+  group('输入(android_input / input_timing)', () {
+    MpFlutterConfig load(String yaml) => loadConfig('/r',
+        fileExists: (p) => p == '/r/mp_flutter.yaml', readFile: (_) => yaml, warn: (_) {});
+    test('解析与缺省', () {
+      final c = load('android_input: overlay\ninput_timing: true\n');
+      expect(c.androidInput, 'overlay');
+      expect(c.inputTiming, true);
+      expect(load('appid: x\n').androidInput, isNull);
+      expect(load('appid: x\n').inputTiming, isNull);
+    });
+    test('取值不合法显式失败', () {
+      expect(() => load('android_input: hidden\n'), throwsA(isA<ConfigParseFailure>()));
+      expect(() => load('input_timing: 1\n'), throwsA(isA<ConfigParseFailure>()));
+    });
+  });
 }

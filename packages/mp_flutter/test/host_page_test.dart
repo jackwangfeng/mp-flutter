@@ -9,7 +9,8 @@ import 'package:mp_flutter/src/pipeline.dart';
 /// [scenario] 是一段 JS,可用 `page`(已 onLoad 的实例)、`calls`(调用记录)、
 /// `done(obj)`(输出结果)。
 Future<Map<String, dynamic>> runHostPage(String js,
-    {required String bootMode, Map<String, dynamic> options = const {}, required String scenario}) async {
+    {required String bootMode, Map<String, dynamic> options = const {}, required String scenario,
+    String platform = 'ios'}) async {
   final dir = Directory.systemTemp.createTempSync('mpf_host_');
   addTearDown(() => dir.deleteSync(recursive: true));
   File('${dir.path}/page.js').writeAsStringSync(js);
@@ -20,6 +21,9 @@ let def = null;
 const wx = {
   createSelectorQuery: () => ({ select: () => ({ node: (cb) => ({ exec: () => cb({ node: {} }) }) }) }),
   getWindowInfo: () => ({ windowWidth: 390, windowHeight: 844, pixelRatio: 3 }),
+  getSystemInfoSync: () => ({ platform: '$platform' }),
+  onKeyboardHeightChange: (cb) => { globalThis.__kb = cb; },
+  hideKeyboard: () => calls.push('hideKeyboard'),
   restartMiniProgram: (o) => calls.push('restart ' + o.path),
   showModal: () => {},
   showShareMenu: (o) => calls.push('showShareMenu ' + JSON.stringify(o.menus)),
@@ -39,11 +43,12 @@ const req = (p) => {
   if (/canvaskit-loader\\.js\$/.test(p)) return { acquireGlContext: () => gl };
   if (/touch-bridge\\.js\$/.test(p)) return { createTouchBridge: () => ({ cancelAll() {}, handle() {} }) };
   if (/text-bridge\\.js\$/.test(p)) return {
-    createViewSync: () => ({ apply() {}, nativeInput() {} }),
-    createTextBridge: () => ({
+    createViewSync: () => ({ apply() {}, nativeInput: (v, c) => calls.push('viewNativeInput ' + v + ' ' + c) }),
+    createTextBridge: (o) => (calls.push('textBridge offscreen=' + o.offscreen + ' guardEmpty=' + o.guardEmpty), {
       nativeBlur: (s) => calls.push('nativeBlur ' + s),
       pause: () => calls.push('pause'), resume: () => calls.push('resume'),
-      nativeInput() {}, nativeConfirm() {}, dispose() {}, wake: () => calls.push('wake'),
+      nativeInput: (ev) => { calls.push('nativeInput ' + JSON.stringify(ev)); return ev.value !== 'IGNORE'; },
+      nativeConfirm() {}, dispose() {}, wake: () => calls.push('wake'),
     }),
   };
   if (/native-views\\.js\$/.test(p)) return {
@@ -56,6 +61,14 @@ const req = (p) => {
     createSemanticsMirror: () => ({
       start: () => calls.push('semanticsMirrorStart'),
       stop: () => calls.push('semanticsMirrorStop'),
+    }),
+  };
+  if (/input-timing\\.js\$/.test(p)) return {
+    createInputTiming: () => ({
+      nativeInput: () => calls.push('t:nativeInput'), engineIn: (t, ok) => calls.push('t:engineIn ' + ok),
+      touch: (e) => calls.push('t:' + e.type), nativeFocus: () => calls.push('t:focus'),
+      nativeBlur: () => calls.push('t:blur'), stop: () => calls.push('t:stop'),
+      state() {}, ignored() {}, keyboard() {}, setData: () => null,
     }),
   };
   if (/perf-hud\\.js\$/.test(p)) return {
@@ -100,10 +113,10 @@ void main() {
     });
   });
 
-  test('--force-platform android:承载页把平台覆盖传给 boot', () async {
+  test('--force-platform android:承载页把平台覆盖传给 boot,并让垫片模拟不支持 \\p{…}', () async {
     final r = await runHostPage(buildHostPageJs(verify: true, forcePlatform: 'android'),
         bootMode: 'ok', scenario: 'done({ calls });');
-    expect(r['calls'], contains('boot platform=android'));
+    expect(r['calls'], contains('boot platform=android simulate=android'));
   });
 
   test('--force-platform ios:平台 ios,并让垫片模拟 JavaScriptCore(无 v8BreakIterator/Segmenter)', () async {
@@ -399,6 +412,84 @@ void main() {
           bootMode: 'ok', scenario: '''
         done({ early: __bootOpts.earlyWasm, bold: __bootOpts.cjkBoldTiming });''');
       expect(o, {'early': false, 'bold': 'eager'});
+    });
+  });
+
+  group('安卓原生框位置(android_input)与组字空值', () {
+    test('安卓真机(platform=android):默认屏幕外 + 丢弃可疑空值', () async {
+      final r = await runHostPage(buildHostPageJs(verify: false), bootMode: 'ok', platform: 'android',
+          scenario: 'done({ calls });');
+      expect(r['calls'], contains('textBridge offscreen=true guardEmpty=true'));
+    });
+    test('iOS 真机:叠放,不丢空值', () async {
+      final r = await runHostPage(buildHostPageJs(verify: false), bootMode: 'ok', platform: 'ios',
+          scenario: 'done({ calls });');
+      expect(r['calls'], contains('textBridge offscreen=false guardEmpty=false'));
+    });
+    test('android_input=overlay:安卓也叠放(仍丢可疑空值)', () async {
+      final r = await runHostPage(buildHostPageJs(verify: false, androidInput: 'overlay'), bootMode: 'ok',
+          platform: 'android', scenario: 'done({ calls });');
+      expect(r['calls'], contains('textBridge offscreen=false guardEmpty=true'));
+    });
+    test('--force-platform 按模拟的平台,不看真机平台', () async {
+      final a = await runHostPage(buildHostPageJs(verify: true, forcePlatform: 'android-noIntl'), bootMode: 'ok',
+          platform: 'devtools', scenario: 'done({ calls });');
+      expect(a['calls'], contains('textBridge offscreen=true guardEmpty=true'));
+      final i = await runHostPage(buildHostPageJs(verify: true, forcePlatform: 'ios'), bootMode: 'ok',
+          platform: 'android', scenario: 'done({ calls });');
+      expect(i['calls'], contains('textBridge offscreen=false guardEmpty=false'));
+    });
+    test('非法取值', () {
+      expect(() => buildHostPageJs(verify: false, androidInput: 'hidden'), throwsArgumentError);
+    });
+    test('onMpInput:detail 的 value/cursor/keyCode 交给桥;桥丢弃时不记进视图同步;不返回值', () async {
+      final r = await runHostPage(buildHostPageJs(verify: false), bootMode: 'ok', scenario: '''
+        const ret1 = page.onMpInput({ detail: { value: 'ab', cursor: 2, keyCode: 66 } });
+        const ret2 = page.onMpInput({ detail: { value: 'IGNORE', cursor: 0 } });
+        done({ calls, ret: [ret1 === undefined, ret2 === undefined] });''');
+      expect(r['calls'], containsAllInOrder(['nativeInput {"value":"ab","cursor":2,"keyCode":66}', 'viewNativeInput ab 2']));
+      expect(r['calls'], isNot(contains(startsWith('viewNativeInput IGNORE'))));
+      expect(r['ret'], [true, true]);
+    });
+  });
+
+  test('键盘重弹兜底:原生 blur 后 5s 内键盘升起而没有聚焦中的原生框 → wx.hideKeyboard', () async {
+    final r = await runHostPage(buildHostPageJs(verify: false), bootMode: 'ok', scenario: '''
+      __kb({ height: 300 });                                   // 没 blur 过:不管
+      const a = calls.filter((c) => c === 'hideKeyboard').length;
+      page.data.mpInput = { visible: true, focus: true };
+      page.onMpBlur({ currentTarget: { dataset: { session: 1 } } });
+      __kb({ height: 300 });                                   // 原生框还聚焦着(切到另一个框):不管
+      const b = calls.filter((c) => c === 'hideKeyboard').length;
+      page.data.mpInput = { visible: false, focus: false };
+      __kb({ height: 0 });
+      __kb({ height: 336 });                                   // 幽灵键盘:收起
+      done({ a, b, c: calls.filter((c) => c === 'hideKeyboard').length });''');
+    expect(r, {'a': 0, 'b': 0, 'c': 1});
+  });
+
+  group('--input-timing(默认关)', () {
+    test('默认不 require input-timing.js、不绑 onMpFocus', () async {
+      final js = buildHostPageJs(verify: false);
+      expect(js, isNot(contains('input-timing')));
+      expect(js, isNot(contains(RegExp(r'mpT\b'))));
+    });
+    test('打开后:触摸/原生 input/focus/blur 都打点,onUnload 停止;JS 语法有效', () async {
+      final js = buildHostPageJs(verify: true, inputTiming: true, perfHud: true);
+      final dir = Directory.systemTemp.createTempSync('mpf_host_chk3_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final f = File('${dir.path}/page.js')..writeAsStringSync(js);
+      final chk = await Process.run('node', ['--check', f.path]);
+      expect(chk.exitCode, 0, reason: chk.stderr.toString());
+      final r = await runHostPage(js, bootMode: 'ok', scenario: '''
+        page.onMpTouch({ type: 'touchstart', touches: [{}] });
+        page.onMpFocus({ detail: { value: '' } });
+        page.onMpInput({ detail: { value: 'a', cursor: 1 } });
+        page.onMpBlur({ currentTarget: { dataset: { session: 1 } } });
+        page.onUnload();
+        done({ calls });''');
+      expect(r['calls'], containsAllInOrder(['t:touchstart', 't:focus', 't:nativeInput', 'nativeInput {"value":"a","cursor":1}',
+        't:engineIn true', 't:blur', 'nativeBlur 1', 't:stop']));
     });
   });
 }

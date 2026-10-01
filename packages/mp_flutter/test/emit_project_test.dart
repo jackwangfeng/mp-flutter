@@ -77,6 +77,14 @@ void main() {
     expect(rule['network'], 'all');
   });
 
+  test('原生输入框隐藏原生光标:input/textarea 带 cursor-color 全透明,WXSS caret-color 透明', () {
+    final wxml = files.textFiles['pages/flutter/flutter.wxml']!;
+    expect(RegExp(r'<input[^>]*cursor-color="#00000000"').hasMatch(wxml), isTrue);
+    expect(RegExp(r'<textarea[^>]*cursor-color="#00000000"').hasMatch(wxml), isTrue);
+    final wxss = files.textFiles['pages/flutter/flutter.wxss']!;
+    expect(wxss, contains('caret-color: transparent'));
+  });
+
   test('承载页 wxml 含 webgl 画布', () {
     final wxml = files.textFiles['pages/flutter/flutter.wxml']!;
     expect(wxml, contains('type="webgl"'));
@@ -139,6 +147,13 @@ void main() {
     final wxml = files.textFiles['pages/flutter/flutter.wxml']!;
     expect('data-session="{{mpInput.session}}"'.allMatches(wxml), hasLength(2),
         reason: 'input 与 textarea 都要带');
+  });
+
+  test('--input-timing 才给原生框绑 bindfocus(关闭时不注入)', () {
+    expect(files.textFiles['pages/flutter/flutter.wxml']!, isNot(contains('onMpFocus')));
+    final t = emitProject(appId: 'wx', subPackageRoots: const [], entryPagePath: 'pages/flutter/flutter',
+        inputTiming: true);
+    expect('bindfocus="onMpFocus"'.allMatches(t.textFiles['pages/flutter/flutter.wxml']!), hasLength(2));
   });
 
   test('产出的每个 JS 文件都能通过 node --check(语法错误会让整个小程序起不来)', () {

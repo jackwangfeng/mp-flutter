@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.2.5 — 2026-10-01
+
+### 输入跟手(安卓)
+
+- **安卓原生输入框默认放到屏幕外**(`android_input: offscreen` / `--android-input`,默认):安卓
+  原生光标设不成透明,叠在 TextField 上会出现两根光标、两套字体排版越打越偏。现在只在安卓上把原生框
+  水平移出可视区(left 固定 -2000px 起,top/宽/高照常跟随,键盘顶起页面照常),iOS 仍叠放;
+  `textarea` 同样处理。平台取 `wx.getSystemInfoSync().platform`,`--force-platform` 构建按模拟的平台。
+  `overlay` 恢复旧行为。TextField 区域的点击因此落到画布上,Flutter 自己挪光标再推给原生框。
+- **输入期间不再 setData**:文本桥状态里 `value`/`cursor` 只在引擎主动改值、程序化挪光标时出现,
+  视图同步按字段 diff,几何/焦点不变时一个字段都不发(之前每次按键整份 13 个字段 setData,真机 4–7ms)。
+  引擎清空推回原生框等两步写逻辑保留,光标也走同样的两步写。
+- **修复:输入框聚焦时点画布,原生框消失、键盘收起**:垫片焦点切换派发 blur 时,引擎
+  `handleBlur` 同步把焦点抢回输入元素,外层随后又用过期的 `flutter-view` 通知了订阅者,文本桥以为
+  失焦。现在嵌套切换时只按最终焦点通知一次;同一元素重新聚焦不算新会话。
+- **安卓组字期间的空 value 不清掉已上屏内容**:一次事件从 ≥2 个字符直接变空(或 1→0 且带非退格
+  keyCode)视为可疑并丢弃。微信 WebView 的 input 拿不到组字文本(见 support-matrix 第 15 条)。
+- **键盘重弹兜底**:原生 blur 后 5s 内键盘升起而没有聚焦中的原生框时 `wx.hideKeyboard()`。
+- **`--input-timing`**(`input_timing`,默认关,关闭时不打包不注入):每个输入相关事件一行 `[mp-t]`
+  ——触摸、引擎焦点、状态下发、setData(同步/回调)、原生 focus/blur/input(完整 `e.detail` 与
+  `e.timeStamp`)、键盘高度、`ParagraphBuilder.addText` 出现这次输入文字(paint)、该帧 flush、
+  下一个 rAF(估算上屏),并用 `Date.now() - e.timeStamp` 的最小值做基准估算按键到 JS 的延迟。
+
+### 修复:安卓真机输入框插入文字不回显、iOS 双光标
+
+- **安卓真机输入框插入文字不回显**(控制台 `Illegal RegExp pattern (SyntaxError: Invalid regular
+  expression: /\p{Space_Separator}/u: Invalid property name)`,之后一串 `Another exception was thrown`):
+  安卓微信的 JS 引擎不带 ICU,不支持正则的 Unicode 属性转义 `\p{…}`/`\P{…}`;Flutter 框架
+  `text_painter.dart` 的 `[\p{Space_Separator}\p{Punctuation}]` 与 `\p{Space_Separator}` 在插入文字时
+  构造,抛异常后这次更新丢掉,输入框直到失焦才刷新(删除不走这条路径)。开发者工具(Chromium)与
+  iOS(JavaScriptCore)都支持,复现不了。现在**构建期自动改写**:`js/unicode-props.js` 扫描
+  `main.dart.js` 的字符串/正则字面量,把属性转义展开成等价的 `\u{…}` 码点区间(区间由构建机
+  Node 遍历全部码点实测,按字符类内外位置展开,`\P` 用补集),在分片之前执行;Node 也不认识的
+  属性名构建失败(退出码 5,错误码 `unknown-property`)。
+- `--force-platform android` / `android-noIntl` 的垫片模拟"不支持 Unicode 属性转义"(包一层
+  `RegExp` 构造函数,u 标志下遇到 `\p{` 抛与真机同样的 SyntaxError),模拟器可复现;
+  `tools/e2e/run.sh` 的这两个配置缺省跑 `accept.js` + `accept-interact.js`。
+- **iOS 双光标**:原生透明输入框的光标(微信默认绿色)仍然可见、且与 Flutter 画的光标对不上。
+  `<input>`/`<textarea>` 加 `cursor-color="#00000000"`(基础库 3.1.0+,iOS 取十六进制色值;
+  textarea 文档未列该属性,一并带上),WXSS `caret-color: transparent` 保留并加 `!important`。
+
+真机实测验证:安卓(小米)、iPhone 15 ——输入法上屏、退格、组字确认回显正确,单光标,
+按键到画面 ~10–25ms。模拟器配置 android / android-noIntl 现在模拟"不支持 `\p{}`",跑
+accept-interact 脚本。
+
 ## 0.2.4 — 2026-09-30
 
 冷启动优化五项,均可单独开关,外加分包下载/注入耗时的真机测量手段;这一版对真机首次

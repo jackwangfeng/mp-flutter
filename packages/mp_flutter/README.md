@@ -60,6 +60,8 @@ dart run mp_flutter doctor
 | `--private-info=<接口名>` | 声明用户隐私接口(写入 `app.json` 的 `requiredPrivateInfos`),可重复。取值:`getFuzzyLocation`/`getLocation`/`onLocationChange`/`startLocationUpdate`/`startLocationUpdateBackground`/`chooseAddress`/`choosePoi`/`chooseLocation`。定位类接口(除 `chooseAddress` 外)会自动带上 `permission.scope.userLocation`;`getLocation`/`getFuzzyLocation` 不能同时声明 |
 | `--semantics-mirror` | 开启 WXML 伴生层(语义树镜像),默认关闭 |
 | `--perf-hud` | 开启真机性能测量(`[mp-perf]`/`[mp-boot]` 控制台日志 + 左上角浮层),默认关闭。见下方「真机性能测量」 |
+| `--input-timing` | 输入计时诊断:每个输入相关事件打一行 `[mp-t]`(触摸、引擎焦点、状态下发、setData、原生 focus/blur/input 带完整 `e.detail`、键盘高度、Flutter 排版到这次输入的文字、上屏帧),并估算按键到 JS 的延迟。默认关闭,关闭时不打包、不注入 |
+| `--android-input=offscreen\|overlay` | 安卓上原生输入框放哪:`offscreen`(默认)= 水平移出可视区、竖直位置不变(安卓原生光标设不成透明,叠放会有两根光标);`overlay` = 与 iOS 一样透明叠在输入框上。iOS 始终叠放 |
 | `--no-shader-warmup` | 关闭着色器预热(默认开):首帧之后趁空闲,在引擎的 GrDirectContext 上把常见绘制组合各画一遍,让 GL program 提前编译,首次进入列表/卡片页时不再当帧编译(iOS 无 JIT 时单个 program 百 ms 级)。不占冷启动,有动画/滚动/触摸时暂停;轻项一片最多攒 8ms,阴影/模糊等重项拆到最细粒度、要求连续空闲 1s 才画、每片一个 |
 | `--shader-warmup-light` | 着色器预热只画轻项(文字/纯色/图片/圆/描边/路径等),跳过阴影/`BoxShadow`/`BackdropFilter`/颜色矩阵等重项(真机上单个 program 可达上百 ms)。默认关闭,对 `--no-shader-warmup` 无效 |
 | `--no-licenses` | 不打包第三方许可证全文(`assets/NOTICES`,换成空占位),默认打包(放在按需分包,只在打开许可证页时下载)。见根 README「包体积与冷启动」 |
@@ -92,6 +94,8 @@ require_location: true
 private_infos: [chooseLocation, choosePoi]   # 与 --private-info 合并去重
 semantics_mirror: false
 perf_hud: false
+# input_timing: false          # 输入计时诊断 [mp-t](同 --input-timing)
+# android_input: offscreen     # 安卓原生输入框:offscreen(默认)/ overlay,同 --android-input
 shader_warmup: true            # 首帧后空闲时预热着色器(同 --no-shader-warmup 关闭)
 # shader_warmup_light: true     # 预热只画轻项、跳过重项(同 --shader-warmup-light)
 safe_area: true

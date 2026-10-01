@@ -75,6 +75,8 @@ mp_flutter 基于 Flutter 的 web target,这一步失败绝大多数时候是宿
 
 `canvaskit.js` 的构建期补丁(或 esbuild 语法降级)找不到预期的代码模式,说明
 上游 CanvasKit/引擎产物的内部结构变了。
+`main.dart.js` 的正则 Unicode 属性转义改写失败(`[unicode-props] unknown-property` 等)
+也走这个退出码,见下文「安卓真机输入框打字不显示」。
 
 **处理**:先跑一遍 `tools/e2e` 回归确认问题范围;这类失败通常需要跟着上游
 产物变化更新 `packages/mp_flutter/lib/src/transform/canvaskit_js.dart` 里的
@@ -204,6 +206,21 @@ mp_flutter 基于 Flutter 的 web target,这一步失败绝大多数时候是宿
 
 下载成功的分片缓存在 `wx.env.USER_DATA_PATH/mp-fonts-cache/`(上限 10MB,LRU
 淘汰),下次启动直接读本地文件。
+
+### 安卓真机输入框打字不显示,失焦后才出来;控制台 `Illegal RegExp pattern ... Invalid property name`
+
+安卓微信的 JS 引擎不带 ICU,不支持正则的 Unicode 属性转义(`\p{Space_Separator}` 这类)。Flutter
+框架插入文字时会构造这样的正则,抛异常后这次更新丢掉。构建期已自动改写(构建日志里有一行
+`正则 Unicode 属性转义改写:N 处(…)`),出现这个报错通常是:
+
+1. 用的是旧版 mp_flutter 构建的产物——升级后重新构建;用 `grep -l 'p{' <产物>/pkg-dart-*/dart.js`
+   确认产物里已经没有属性转义;
+2. 业务代码在运行时拼接正则源码(构建期看不到),请改成固定字符串或改用显式码点区间;
+3. 构建失败报 `unknown-property`:构建机 Node 不认识这个属性名(Node 版本过旧或拼写错误),
+   升级 Node 或改正属性名。
+
+模拟器(Chromium)复现不了;用 `--verify --force-platform android-noIntl`(或 `tools/e2e/run.sh android-noIntl`)
+可以在开发者工具里模拟。
 
 ### 启动界面一直停着 / 显示「启动失败:……」
 

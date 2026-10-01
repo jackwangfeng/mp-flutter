@@ -3,7 +3,7 @@ description: >-
   在 mp-flutter 编译的微信小程序里,把 MpVideo/MpMap/MpCamera 接到原生
   <video>/<map>/<camera> 组件(Task 2 的 JS 同步层);其它平台/普通浏览器
   上渲染 fallback。
-version: 0.2.4
+version: 0.2.5
 publish_to: none
 
 environment:

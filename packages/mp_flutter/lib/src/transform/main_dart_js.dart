@@ -18,7 +18,12 @@ const _marker = '// [mp-flutter] module-scope global shadowing';
 /// 播种完成后才被赋值 `.crypto` 属性的同一个对象,require() 求值时(即
 /// `manifest.loadDart()` 被调用、boot.js 已 await 完播种之后)读到的必然是
 /// 最新值,不需要 bom-shim 另外导出一个字段。
-String injectPreamble(String source, {String shimPath = './bom-shim.js'}) {
+///
+/// [shadowRegExp]:仅 `--verify --force-platform android/android-noIntl` 构建为
+/// true,额外遮蔽 `RegExp` 为垫片的包装(`__mp.RegExp`),在模拟器里复现安卓
+/// 真机不支持 Unicode 属性转义 `\p{…}` 的行为(见 bom-shim.js engineRegExp)。
+/// 正常构建不遮蔽,产物里 `RegExp` 仍是引擎原生构造函数。
+String injectPreamble(String source, {String shimPath = './bom-shim.js', bool shadowRegExp = false}) {
   if (source.contains(_marker)) {
     throw const TransformFailure(
       'preamble 重复注入',
@@ -31,6 +36,6 @@ var __mp = require('$shimPath');
 var window = __mp.window, document = __mp.document, navigator = __mp.navigator,
     self = __mp.self, location = __mp.location, top = window, parent = window,
     crypto = __mp.self.crypto;
-''';
+${shadowRegExp ? 'var RegExp = __mp.RegExp;\n' : ''}''';
   return preamble + source;
 }

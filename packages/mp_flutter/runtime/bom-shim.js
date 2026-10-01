@@ -225,10 +225,17 @@ function clampSel(v, s) {
 
 // 切换焦点:旧元素 blur/focusout(relatedTarget=新元素或 null),新元素 focus/focusin。
 // focus/blur 不冒泡,focusin/focusout 冒泡 —— 与浏览器一致,引擎在 flutter-view 上听 focusin/focusout。
+//
+// 嵌套切换:派发 blur 时监听器可能同步把焦点再挪走(引擎 handleBlur 发现
+// relatedTarget 仍在同一个 FlutterView 内,会立刻 moveFocusToActiveDomElement
+// 把焦点抢回输入元素——在输入框聚焦时点画布就是这条路)。内层 setActive 已经
+// 按最终焦点通知过订阅者,外层不能再用自己过期的 next 通知一次(否则文本桥以为
+// 焦点落在 flutter-view、收起原生框,而 activeElement 实际仍是输入元素)。
 function setActive(next, origin) {
   const prev = shared.active;
   if (prev === next) return;
   shared.active = next;
+  const gen = shared.focusGen = (shared.focusGen || 0) + 1;
   const EV = shared.EV;
   if (prev) {
     prev.dispatchEvent(new EV.FocusEvent('blur', { relatedTarget: next || null, bubbles: false }));
@@ -238,6 +245,7 @@ function setActive(next, origin) {
     next.dispatchEvent(new EV.FocusEvent('focus', { relatedTarget: prev || null, bubbles: false }));
     next.dispatchEvent(new EV.FocusEvent('focusin', { relatedTarget: prev || null, bubbles: true }));
   }
+  if (gen !== shared.focusGen) return;   // 派发期间发生了嵌套切换,内层已通知最终焦点
   shared.focusCbs.slice().forEach((cb) => { try { cb(next || null); } catch (e) { /* 回调异常不影响焦点 */ } });
 }
 
@@ -677,6 +685,53 @@ function engineIntl(simulate) {
   return native;
 }
 
+/**
+ * 安卓真机(微信 JS 引擎不带 ICU)不支持正则的 Unicode 属性转义:
+ * `new RegExp('\\p{Space_Separator}', 'u')` 直接抛
+ * `SyntaxError: Invalid regular expression: /\p{Space_Separator}/u: Invalid property name`。
+ * 开发者工具(Chromium/V8)带 ICU,复现不了;iOS 的 JSCore 支持。
+ *
+ * 构建期已把 main.dart.js 里的 `\p{…}` / `\P{…}` 改写成码点区间
+ * (js/unicode-props.js),这里只是 --verify --force-platform android /
+ * android-noIntl 下在模拟器里复现真机行为:包一层 RegExp 构造函数,带 u/v
+ * 标志且源码含未转义的 `\p{` / `\P{` 时抛与真机同样的 SyntaxError。
+ * 只影响经构造函数创建的正则(dart2js 的 RegExp 全走 `new RegExp(src, flags)`);
+ * 正则字面量不经过构造函数,构建期改写同样覆盖字面量。
+ * main.dart.js 经 preamble 的模块级 `var RegExp = __mp.RegExp` 拿到这个包装。
+ */
+function hasUnicodePropertyEscape(src) {
+  for (let i = 0; i < src.length - 2; i++) {
+    if (src.charCodeAt(i) !== 92) continue; // '\\'
+    const c = src[i + 1];
+    if ((c === 'p' || c === 'P') && src[i + 2] === '{') return true;
+    i++; // 跳过被转义的字符(含 `\\`)
+  }
+  return false;
+}
+
+function engineRegExp(simulate) {
+  const Native = RegExp;
+  if (simulate !== 'android' && simulate !== 'android-noIntl') return Native;
+  const check = (pattern, flags) => {
+    const isRe = pattern instanceof Native;
+    const src = isRe ? pattern.source : String(pattern === undefined ? '(?:)' : pattern);
+    const f = flags === undefined ? (isRe ? pattern.flags : '') : String(flags);
+    if ((f.indexOf('u') >= 0 || f.indexOf('v') >= 0) && hasUnicodePropertyEscape(src)) {
+      throw new SyntaxError('Invalid regular expression: /' + src + '/' + f + ': Invalid property name');
+    }
+  };
+  return new Proxy(Native, {
+    construct(target, args) {
+      check(args[0], args[1]);
+      return Reflect.construct(target, args);
+    },
+    apply(target, thisArg, args) {
+      check(args[0], args[1]);
+      return Reflect.apply(target, thisArg, args);
+    },
+  });
+}
+
 // 可能缺失的全局只能 typeof 探测(安卓真机的 JS 引擎连 Intl 都可能没有,其余
 // 宿主提供的全局同理不能假设)。ECMAScript 语言本身的内建(Object/Promise/
 // Proxy/BigInt 等)真机都有,不在此列。
@@ -693,6 +748,7 @@ function install(opts) {
   const ctx = { canvas, width, height, images: null };
   const g = globalThis;
   const IntlForEngine = engineIntl(opts.simulate);
+  M.RegExp = engineRegExp(opts.simulate);
 
   // 自带 polyfill 必须在构造其余全局对象之前装好。
   const perf = makePerformance();
@@ -992,4 +1048,4 @@ function install(opts) {
   };
 }
 
-const M = module.exports = { install, report };
+const M = module.exports = { install, report, RegExp, hasUnicodePropertyEscape };

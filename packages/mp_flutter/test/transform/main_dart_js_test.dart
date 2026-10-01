@@ -48,4 +48,11 @@ void main() {
     final once = injectPreamble(_fixture);
     expect(() => injectPreamble(once), throwsA(isA<TransformFailure>()));
   });
+
+  test('默认不遮蔽 RegExp;shadowRegExp(--force-platform android*)时遮蔽为垫片包装', () {
+    expect(injectPreamble(_fixture), isNot(contains('RegExp')));
+    final out = injectPreamble(_fixture, shadowRegExp: true);
+    expect(out, contains('var RegExp = __mp.RegExp;'));
+    expect(out.indexOf('var RegExp'), lessThan(out.indexOf('dartProgram')));
+  });
 }

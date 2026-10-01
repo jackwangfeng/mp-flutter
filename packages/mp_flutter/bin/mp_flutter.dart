@@ -17,7 +17,7 @@ import 'package:mp_flutter/src/emit_project.dart' show normalizeSplashColor;
 /// 手动与 pubspec.yaml 的 `version:` 保持一致——Dart 没有开销对等的运行时
 /// 方式读取自身包的 pubspec 只为取一个版本号(`resolvePackageRoot()` 倒是能
 /// 定位到包根,但读文件+解析 YAML 只为一个字符串不值得),这两处都极少改动。
-const kPackageVersion = '0.2.4';
+const kPackageVersion = '0.2.5';
 
 /// [runPipeline] 的签名,供 `runCli` 测试注入——单测不应该真的跑一遍
 /// `flutter build web`。
@@ -53,6 +53,8 @@ typedef PipelineRunner = Future<SizeReport> Function({
   String bootAssets,
   bool initialRenderingCache,
   bool lazyCodeLoading,
+  String androidInput,
+  bool inputTiming,
 });
 
 /// 探测本机 doctor 检查项的函数签名,供 `runCli` 测试注入。
@@ -105,6 +107,17 @@ ArgParser buildArgParser() {
             '默认关闭:关闭时不 require 任何相关模块,不产生运行时开销。'
             '可被 mp_flutter.yaml 的 perf_hud 覆盖。',
         defaultsTo: false)
+    ..addFlag('input-timing',
+        help: '开启输入计时诊断:每个输入相关事件打一行 [mp-t](触摸、引擎焦点、状态下发、setData、'
+            '原生 focus/blur/input 带完整 e.detail、键盘高度、Flutter 排版到这次输入的文字、上屏帧),'
+            '并估算按键到 JS 的延迟。默认关闭:关闭时不打包、不注入任何相关代码。'
+            '可被 mp_flutter.yaml 的 input_timing 覆盖。',
+        defaultsTo: false)
+    ..addOption('android-input',
+        allowed: kAndroidInputConfigModes,
+        help: '安卓上原生输入框放哪。offscreen = 水平移出可视区、竖直位置不变(默认;安卓原生光标'
+            '设不成透明,叠在输入框上会出现两根光标);overlay = 与 iOS 一样透明叠在输入框上。'
+            'iOS 始终叠放。可被 mp_flutter.yaml 的 android_input 覆盖。')
     ..addFlag('safe-area',
         help: '构建期生成入口包装,把小程序安全区注入 MediaQuery.padding/viewPadding(K1)。'
             '工程若在 runApp() 之前自己创建了 WidgetsFlutterBinding 子类,会与入口包装冲突'
@@ -372,6 +385,8 @@ Future<int> runCli(
   final bootAssets = pickStr('boot-assets', config.bootAssets, 'auto');
   final initialRenderingCache = pickBool('initial-rendering-cache', config.initialRenderingCache, true);
   final lazyCodeLoading = pickBool('lazy-code-loading', config.lazyCodeLoading, true);
+  final androidInput = pickStr('android-input', config.androidInput, 'offscreen');
+  final inputTiming = pickBool('input-timing', config.inputTiming, false);
   final fontBaseUrl = args.wasParsed('font-base-url')
       ? args['font-base-url'] as String
       : config.fontBaseUrl;
@@ -468,6 +483,8 @@ Future<int> runCli(
       bootAssets: bootAssets,
       initialRenderingCache: initialRenderingCache,
       lazyCodeLoading: lazyCodeLoading,
+      androidInput: androidInput,
+      inputTiming: inputTiming,
     );
     if (!report.ok) {
       err.writeln('\n❌ 包体积超限,产物不可用。');

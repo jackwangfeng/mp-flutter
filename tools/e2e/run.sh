@@ -5,16 +5,19 @@
 #
 # config:
 #   stable  - 用默认(自动探测)的 flutter 稳定版构建
-#   android - 同 stable,额外传 --force-platform android(仍用真机原生组件几何)
+#   android - 同 stable,额外传 --force-platform android(仍用真机原生组件几何;
+#             垫片模拟安卓真机不支持正则 \p{…})
 #   ios     - 同 stable,额外传 --force-platform ios:垫片遮蔽 Intl.v8BreakIterator
 #             与 Intl.Segmenter,模拟 iOS 真机的 JavaScriptCore
 #   android-noIntl - 同 stable,额外传 --force-platform android-noIntl:垫片把
-#             Intl 整个遮蔽掉,模拟没有 Intl 的安卓真机 JS 引擎
+#             Intl 整个遮蔽掉,模拟没有 Intl 的安卓真机 JS 引擎(同样模拟不支持 \p{…})
 #   ohos    - 用 flutter_ohos 构建,flutter 二进制取环境变量 FLUTTER_OHOS
 #             (未设置则报错退出,不静默回退到别的 flutter)
 #
 # script 缺省 = 全部(accept.js accept-interact.js accept-net.js accept-wx.js
-# accept-pv.js)。也可以传一个或多个具体脚本名(不带路径),例如:
+# accept-pv.js);android / android-noIntl 缺省只跑 accept.js accept-interact.js
+# (这两个配置的垫片都模拟安卓真机不支持正则 Unicode 属性转义 \p{…})。
+# 也可以传一个或多个具体脚本名(不带路径),例如:
 #   tools/e2e/run.sh ohos accept.js
 #   tools/e2e/run.sh android accept-pv.js
 #
@@ -99,7 +102,7 @@ run_with_timeout() {
 
 usage() {
   echo "用法: $0 <stable|ohos|android|ios|android-noIntl> [script...]" >&2
-  echo "  script 缺省 = 全部:accept.js accept-interact.js accept-net.js accept-wx.js accept-pv.js" >&2
+  echo "  script 缺省 = 全部:accept.js accept-interact.js accept-net.js accept-wx.js accept-pv.js(android/android-noIntl 缺省只跑前两个)" >&2
 }
 
 CONFIG="${1:-}"
@@ -148,7 +151,12 @@ ALL_SCRIPTS=(accept.js accept-interact.js accept-net.js accept-wx.js accept-pv.j
 if [ "$#" -gt 0 ]; then
   SCRIPTS=("$@")
 else
-  SCRIPTS=("${ALL_SCRIPTS[@]}")
+  case "$CONFIG" in
+    # 安卓模拟配置默认只跑首屏 + 交互(含输入框插入文字:垫片模拟真机不支持
+    # 正则 \p{…},见 bom-shim.js engineRegExp),其余脚本与平台无关,按需显式传
+    android|android-noIntl) SCRIPTS=(accept.js accept-interact.js) ;;
+    *) SCRIPTS=("${ALL_SCRIPTS[@]}") ;;
+  esac
 fi
 
 mkdir -p "$OUT_DIR"

@@ -186,6 +186,7 @@ ProjectFiles emitProject({
   bool requireLocation = false,
   List<String> privateInfos = const [],
   bool perfHud = false,
+  bool inputTiming = false,
   String splashTitle = '',
   String splashColor = kDefaultSplashColor,
   List<String> ignoreDirs = const [],
@@ -318,15 +319,15 @@ ProjectFiles emitProject({
 </block>
 ${perfHud ? _perfHudOverlayWxml : ''}${_splashWxml(splashTitle)}<input wx:if="{{mpInput.visible && !mpInput.multiline}}" class="mp-input"
        style="left:{{mpInput.left}}px;top:{{mpInput.top}}px;width:{{mpInput.width}}px;height:{{mpInput.height}}px;font-size:{{mpInput.fontSize}}px"
-       value="{{mpInput.value}}" cursor="{{mpInput.cursor}}" focus="{{mpInput.focus}}"
+       value="{{mpInput.value}}" cursor="{{mpInput.cursor}}" focus="{{mpInput.focus}}" cursor-color="#00000000"
        type="{{mpInput.type}}" password="{{mpInput.password}}" confirm-type="{{mpInput.confirmType}}"
        adjust-position="{{true}}" hold-keyboard="{{true}}"
-       data-session="{{mpInput.session}}" bindinput="onMpInput" bindconfirm="onMpConfirm" bindblur="onMpBlur" />
+       data-session="{{mpInput.session}}" bindinput="onMpInput" bindconfirm="onMpConfirm" bindblur="onMpBlur"${inputTiming ? ' bindfocus="onMpFocus"' : ''} />
 <textarea wx:if="{{mpInput.visible && mpInput.multiline}}" class="mp-input"
        style="left:{{mpInput.left}}px;top:{{mpInput.top}}px;width:{{mpInput.width}}px;height:{{mpInput.height}}px;font-size:{{mpInput.fontSize}}px"
-       value="{{mpInput.value}}" cursor="{{mpInput.cursor}}" focus="{{mpInput.focus}}"
+       value="{{mpInput.value}}" cursor="{{mpInput.cursor}}" focus="{{mpInput.focus}}" cursor-color="#00000000"
        adjust-position="{{true}}" hold-keyboard="{{true}}" disable-default-padding="{{true}}"
-       data-session="{{mpInput.session}}" bindinput="onMpInput" bindblur="onMpBlur" />
+       data-session="{{mpInput.session}}" bindinput="onMpInput" bindblur="onMpBlur"${inputTiming ? ' bindfocus="onMpFocus"' : ''} />
 ''';
 
   final wxss = '''
@@ -340,9 +341,14 @@ page { width: 100%; height: 100%; background: #000; }
    原生组件不能被 Flutter 内容盖住)。 */
 .mp-native-clip { position: fixed; overflow: hidden; z-index: 5; }
 .mp-native-item { position: absolute; }
-/* 原生输入框只负责接收键盘与输入法:透明、无边框,文字与光标由 Flutter 渲染 */
+/* 原生输入框只负责接收键盘与输入法:透明、无边框,文字与光标由 Flutter 渲染。
+   原生光标要藏两层(否则 iOS 上出现第二根光标,微信默认绿色,位置还和 Flutter
+   画的对不上):WXSS 的 caret-color 管 WebView 渲染的输入框(开发者工具、未进入
+   原生态时);聚焦后真机由原生控件接管,只认组件属性 cursor-color(基础库
+   3.1.0+,iOS 取十六进制色值,这里给全透明 #00000000;安卓只认 default/green,
+   设不了透明——安卓默认把原生框放到屏幕外,见 text-bridge.js 与 android_input)。textarea 文档未列 cursor-color,同样带上,不认识时忽略。 */
 .mp-input { position: fixed; z-index: 10; background: transparent; color: transparent;
-            caret-color: transparent; border: none; padding: 0; margin: 0; }
+            caret-color: transparent !important; border: none; padding: 0; margin: 0; }
 /* WXML 伴生层(可选,--semantics-mirror,默认关,Phase 5 Task 4):只服务微信
    的页面内容索引/无障碍能力,视觉上必须完全隐形、不可交互。 */
 .mp-semantics-mirror { position: fixed; opacity: 0; pointer-events: none; overflow: hidden; }

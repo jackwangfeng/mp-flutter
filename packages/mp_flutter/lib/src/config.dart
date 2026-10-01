@@ -121,7 +121,13 @@ const kKnownConfigKeys = <String>{
   'boot_assets',
   'initial_rendering_cache',
   'lazy_code_loading',
+  'android_input',
+  'input_timing',
 };
+
+/// `android_input` / `--android-input`:安卓上原生输入框放哪(offscreen 默认 /
+/// overlay)。与 pipeline.dart 的 `kAndroidInputModes` 同一份取值。
+const kAndroidInputConfigModes = ['offscreen', 'overlay'];
 
 /// `preload` / `--preload`:app.json preloadRule 的挑选策略(冷启动)。
 ///   · auto —— 推荐默认,目前等于 dart;
@@ -210,6 +216,10 @@ class MpFlutterConfig {
   final String? bootAssets;
   final bool? initialRenderingCache;
   final bool? lazyCodeLoading;
+  /// `android_input`:见 [kAndroidInputConfigModes]。null = 未配置。
+  final String? androidInput;
+  /// `input_timing`:输入计时诊断(默认 false)。null = 未配置。
+  final bool? inputTiming;
 
   const MpFlutterConfig({
     this.appId,
@@ -237,6 +247,8 @@ class MpFlutterConfig {
     this.bootAssets,
     this.initialRenderingCache,
     this.lazyCodeLoading,
+    this.androidInput,
+    this.inputTiming,
   });
 
   static const empty = MpFlutterConfig();
@@ -399,6 +411,8 @@ MpFlutterConfig loadConfig(
     bootAssets: asEnum('boot_assets', kBootAssetsModes),
     initialRenderingCache: asBool('initial_rendering_cache'),
     lazyCodeLoading: asBool('lazy_code_loading'),
+    androidInput: asEnum('android_input', kAndroidInputConfigModes),
+    inputTiming: asBool('input_timing'),
   );
 }
 
