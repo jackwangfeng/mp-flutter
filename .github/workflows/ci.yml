@@ -19,6 +19,11 @@ jobs:
         with:
           node-version: '20'
 
+      # 与 lib/src/esbuild_resolver.dart 的 kEsbuildVersion 保持一致。
+      # 语法降级单测禁止自动安装,必须在运行测试前准备真实二进制。
+      - name: 安装 esbuild
+        run: npm install --global esbuild@0.28.2
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ matrix.flutter }}

@@ -8,6 +8,8 @@
   SDK,路径经环境变量 `FLUTTER_OHOS` 提供
 - **Node.js ≥ 18**:`main.dart.js` 分片(`packages/mp_flutter/js/split.js`)与
   esbuild 自动安装都依赖它
+- **esbuild 0.28.2**:构建时可自动安装,但单测禁止触网安装;跑测试前执行
+  `npm install --global esbuild@0.28.2`,或用 `MP_FLUTTER_ESBUILD` 指向该版本二进制。
 - **brotli 命令行工具**(macOS:`brew install brotli`):构建管线用它压缩
   `.wasm.br`
 - 微信开发者工具(仅 E2E 需要,见下),并在设置里打开"服务端口"
