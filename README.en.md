@@ -24,7 +24,7 @@ mp-flutter compiles an existing Flutter project into a WeChat Mini Program. The 
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.0
+  flutter_miniprogram: ^0.3.3
 ```
 
 For an unreleased commit or a private fork, use a git dependency instead:
@@ -35,7 +35,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: main
+      ref: v0.3.3
 ```
 
 **2. Compile** — from the project root (running `dart run flutter_miniprogram doctor` first to self-check your toolchain is recommended):
@@ -81,7 +81,7 @@ Precedence is **CLI flag > `mp_flutter.yaml` > default**.
 
 ## Support Matrix
 
-Verified against Flutter stable **3.41.9** and the `flutter_ohos` fork **3.41.10-ohos-0.0.2-beta**; Node **≥18**; WeChat Mini Program base library **≥3.15.0**. Each platform bridge (rendering, touch, text input, networking, storage, images, fonts, routing, WeChat capabilities, native components, the accessibility mirror) has its own verification status and known caveats in [`docs/support-matrix.md`](docs/support-matrix.md) — read that file for the authoritative, line-by-line list before relying on any specific API.
+Verified against Flutter stable **3.41.9** and the `flutter_ohos` fork **3.41.10-ohos-0.0.2-beta**. **3.47.4** also passes all five Mini Program E2E suites and the platform view semantics variant in WeChat DevTools; device validation is pending. Node **≥18**; WeChat Mini Program base library **≥3.15.0**. Each platform bridge has its own verification status and known caveats in [`docs/support-matrix.md`](docs/support-matrix.md).
 
 ## Capabilities & Limitations
 

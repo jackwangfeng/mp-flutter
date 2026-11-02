@@ -27,12 +27,13 @@ void main() {
       // `dart test` 的工作目录固定是包根(packages/mp_flutter)。
       final packageRoot = Directory.current.path;
 
-      // 优先用仓库里已知装好的 stable Flutter(见 flutter_build.dart 的
+      // 多版本 CI 优先用 FLUTTER_BIN;否则用已知装好的 stable Flutter(见 flutter_build.dart 的
       // resolveFlutterBin),不依赖 PATH 上可能是 flutter_ohos fork 的那个,
       // 保证这个冒烟测试的可重复性。
       final home = Platform.environment['HOME'] ?? '';
       final flutterCandidate = p.join(home, 'development/flutter/bin/flutter');
-      final flutterBin = File(flutterCandidate).existsSync() ? flutterCandidate : 'flutter';
+      final flutterBin = Platform.environment['FLUTTER_BIN'] ??
+          (File(flutterCandidate).existsSync() ? flutterCandidate : 'flutter');
 
       final workDir =
           Directory.systemTemp.createTempSync('mpf 消费者冒烟 with space ');

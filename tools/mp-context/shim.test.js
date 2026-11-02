@@ -257,6 +257,27 @@ test('history.go 越界是空操作,pushState 截断前进栈', () => {
 // Task 3:垫片 DOM 树、焦点与 HTML 元素类(文本输入前置)
 // ---------------------------------------------------------------------
 
+test('DOM 树:autofill 复用 form 时 replaceWith 接入新 input 并保留兄弟顺序', () => {
+  const { shim } = installShim();
+  const doc = shim.document;
+  const form = doc.createElement('form');
+  const before = doc.createElement('input');
+  const old = doc.createElement('input');
+  const after = doc.createElement('input');
+  const next = doc.createElement('input');
+  doc.body.appendChild(form);
+  form.append(before, old, after);
+  old.replaceWith(next);
+  assert.deepStrictEqual(Array.from(form.children), [before, next, after]);
+  assert.strictEqual(old.isConnected, false);
+  assert.strictEqual(next.isConnected, true);
+  next.focus();
+  assert.strictEqual(doc.activeElement, next);
+  next.replaceWith(next);
+  assert.strictEqual(doc.activeElement, next);
+  assert.strictEqual(next.isConnected, true);
+});
+
 test('DOM 树:append 建立父子关系,contains/isConnected/remove 正确', () => {
   const { shim } = installShim();
   const doc = shim.document;

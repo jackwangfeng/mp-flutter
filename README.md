@@ -26,7 +26,7 @@
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.0
+  flutter_miniprogram: ^0.3.3
 ```
 
 也可以用 git 依赖引入本仓库(公开仓库,无需额外凭证;`ref` 建议固定到一个
@@ -39,7 +39,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.3.0
+      ref: v0.3.3
 ```
 
 **2. 编译**——工程根跑一条命令(先跑 `dart run flutter_miniprogram doctor`
@@ -66,7 +66,8 @@ esbuild 首次使用会自动安装,不需要提前装。**只支持 macOS/Linux
 
 ## 支持矩阵
 
-已验证 Flutter stable **3.41.9**、`flutter_ohos` **3.41.10-ohos-0.0.2-beta**;
+已验证 Flutter stable **3.41.9 / 3.47.4**、`flutter_ohos` **3.41.10-ohos-0.0.2-beta**;
+3.47.4 已通过开发者工具运行回归,真机待验。
 Node **≥18**;微信小程序基础库 **≥3.15.0**。每个平台桥(渲染/触摸/文本输入/
 网络/存储/图片/字体/路由/微信能力/原生组件/伴生层)的验证状态与已知限制,
 完整版见 [`docs/support-matrix.md`](docs/support-matrix.md)。
@@ -92,7 +93,7 @@ esbuild、`main.dart.js` 分片器(acorn)均已随 `packages/mp_flutter` 包分�
 
 ### CI
 
-`.github/workflows/ci.yml`(ubuntu-latest,固定 `subosito/flutter-action` 3.41.9 stable、Node 20)
+`.github/workflows/ci.yml`(ubuntu-latest,`subosito/flutter-action` 3.41.9 / 3.47.4 stable 矩阵、Node 20)
 只调用一个脚本——`tools/ci/check.sh`,本地与 CI 共用,顺序跑:JS 单测
 (`tools/mp-context`、`packages/mp_flutter/js/test`)、`dart analyze` + `dart test`
 (`packages/mp_flutter`,含 tag `slow` 的消费者冒烟)、`flutter test`(含
@@ -189,7 +190,7 @@ dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter_wechat
-      ref: v0.2.5
+      ref: v0.3.3
 ```
 
 ```dart

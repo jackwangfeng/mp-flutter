@@ -473,6 +473,21 @@ test('I3:语义树激活后,<input> 位置来自 <flt-semantics> 祖先链而不
   bridge.dispose();
 });
 
+test('3.47.4:复用的 static autofill form 残留 top/left 不隐藏聚焦框', async () => {
+  const { shim, bridge, engineInput, last } = setup();
+  const { el } = engineInput();
+  const form = shim.document.createElement('form');
+  form.style.top = '-9999px';
+  form.style.left = '-9999px';
+  shim.document.body.append(form);
+  form.append(el);
+  el.focus();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.strictEqual(last().visible, true);
+  assert.deepStrictEqual([last().left, last().top], [24, 120]);
+  bridge.dispose();
+});
+
 test('I3:标准场景(无 flt-semantics-host 祖先)不受影响,行为与修复前一致', async () => {
   const { bridge, engineInput, last } = setup();
   const { el } = engineInput();

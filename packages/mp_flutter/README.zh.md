@@ -17,7 +17,7 @@
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.2
+  flutter_miniprogram: ^0.3.3
 ```
 
 也可以用 git 依赖引入本仓库(公开仓库,无需额外凭证;`ref` 建议固定到一个

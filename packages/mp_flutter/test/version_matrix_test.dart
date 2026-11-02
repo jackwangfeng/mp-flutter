@@ -27,21 +27,49 @@ void main() {
   });
 
   test('支持的版本通过校验', () {
-    expect(() => VersionMatrix.check(FlutterVersion.parse(_stableOutput)), returnsNormally);
-    expect(() => VersionMatrix.check(FlutterVersion.parse(_ohosOutput)), returnsNormally);
+    expect(
+      () => VersionMatrix.check(FlutterVersion.parse(_stableOutput)),
+      returnsNormally,
+    );
+    expect(
+      () => VersionMatrix.check(FlutterVersion.parse(_ohosOutput)),
+      returnsNormally,
+    );
   });
 
   test('不支持的版本抛出,且错误信息列出受支持版本', () {
     final v = const FlutterVersion('3.35.0');
     expect(
       () => VersionMatrix.check(v),
-      throwsA(isA<UnsupportedFlutterVersion>().having(
-        (e) => e.message, 'message', allOf(contains('3.35.0'), contains('3.41.9')))),
+      throwsA(
+        isA<UnsupportedFlutterVersion>().having(
+          (e) => e.message,
+          'message',
+          allOf(contains('3.35.0'), contains('3.41.9')),
+        ),
+      ),
     );
   });
 
+  test('Flutter 3.47.4 通过校验,相邻未验证版本仍拒绝', () {
+    final v = FlutterVersion.parse(
+      'Flutter 3.47.4 • channel stable • https://github.com/flutter/flutter.git',
+    );
+    expect(() => VersionMatrix.check(v), returnsNormally);
+    expect(v.isOhosFork, isFalse);
+    for (final version in ['3.47.3', '3.47.5', '3.47.4-pre.1']) {
+      expect(
+        () => VersionMatrix.check(FlutterVersion(version)),
+        throwsA(isA<UnsupportedFlutterVersion>()),
+      );
+    }
+  });
+
   test('解析不出版本号时抛出而非返回空串', () {
-    expect(() => FlutterVersion.parse('garbage'), throwsA(isA<FormatException>()));
+    expect(
+      () => FlutterVersion.parse('garbage'),
+      throwsA(isA<FormatException>()),
+    );
   });
 
   test('stable 版本无已知分叉差异', () {
@@ -65,4 +93,3 @@ void main() {
     expect(divergences, isEmpty);
   });
 }
-

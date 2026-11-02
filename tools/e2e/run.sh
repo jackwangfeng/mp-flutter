@@ -22,6 +22,8 @@
 #   tools/e2e/run.sh android accept-pv.js
 #
 # appid 取环境变量 MP_APPID,缺省 touristappid。
+# 多版本回归可用 FLUTTER_BIN=/absolute/path/to/flutter 显式选择 SDK;
+# 先用该 SDK 在各验收工程执行 flutter pub get。ohos 仍取 FLUTTER_OHOS。
 #
 # 每个脚本:构建对应验收工程 → 产物落 tools/e2e/out/<app>-<config> → 跑脚本
 # 断言。已知偶发(一次运行里小程序在开发者工具里被启动两次,导致断言看到脏
@@ -117,6 +119,14 @@ esac
 # ohos 的 flutter 路径必须显式给,不猜、不回退——猜错了会悄悄拿 stable 的
 # flutter 构建出"看起来是 ohos 其实是 stable"的产物,比直接报错更难查。
 FLUTTER_BIN_ARGS=()
+if [ -n "${FLUTTER_BIN:-}" ]; then
+  if [ ! -x "$FLUTTER_BIN" ]; then
+    echo "❌ FLUTTER_BIN=$FLUTTER_BIN 不存在或不可执行" >&2
+    exit 64
+  fi
+  export PATH="$(dirname "$FLUTTER_BIN"):$PATH"
+  FLUTTER_BIN_ARGS=(--flutter "$FLUTTER_BIN")
+fi
 if [ "$CONFIG" = "ohos" ]; then
   if [ -z "${FLUTTER_OHOS:-}" ]; then
     echo "❌ config=ohos 需要环境变量 FLUTTER_OHOS 指向 flutter_ohos 的 flutter 可执行文件路径" >&2
@@ -128,6 +138,7 @@ if [ "$CONFIG" = "ohos" ]; then
     exit 64
   fi
   FLUTTER_BIN_ARGS=(--flutter "$FLUTTER_OHOS")
+  export PATH="$(dirname "$FLUTTER_OHOS"):$PATH"
 fi
 
 FORCE_PLATFORM_ARGS=()

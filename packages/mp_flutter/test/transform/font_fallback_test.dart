@@ -1,6 +1,7 @@
 import 'dart:io';
 
-import 'package:flutter_miniprogram/src/transform/canvaskit_js.dart' show TransformFailure;
+import 'package:flutter_miniprogram/src/transform/canvaskit_js.dart'
+    show TransformFailure;
 import 'package:flutter_miniprogram/src/transform/font_fallback.dart';
 import 'package:test/test.dart';
 
@@ -48,29 +49,74 @@ const _profile = r'''
 ''';
 
 void main() {
+  test('3.47.4 使用 CanvasKit 缺字检测,只补回退表', () {
+    final source =
+        _minified.substring(0, _minified.indexOf('A.a8S.prototype=')) +
+        'function missing(p){return p.unresolvedCodepoints()}';
+    final out = patchFontFallback(
+      source,
+      family: 'F',
+      usesUnresolvedCodePoints: true,
+    );
+    expect(out, contains('["Roboto","F"]'));
+    expect(out, contains('return p.unresolvedCodepoints()'));
+    expect(out, isNot(contains('__mpMiss')));
+    for (final broken in [
+      source.replaceFirst('.unresolvedCodepoints()', '.changed()'),
+      '$source; other.unresolvedCodepoints()',
+    ]) {
+      expect(
+        () => patchFontFallback(
+          broken,
+          family: 'F',
+          usesUnresolvedCodePoints: true,
+        ),
+        throwsA(isA<TransformFailure>()),
+      );
+    }
+  });
+
   test('压缩产物:回退表初值加上合一字体;缺字检测算上它且只把缺的码点交给贪心', () {
     final out = patchFontFallback(_minified, family: 'MpNotoSansSC');
     expect(out, contains('p=A.b(["Roboto","MpNotoSansSC"],t.s)'));
-    expect(out, contains('{if(b.indexOf("MpNotoSansSC")<0)b.push("MpNotoSansSC");'
-        'var __mpMiss=m.a.a3D(n,b);if(__mpMiss.length!==0)m.aqk(__mpMiss)}},'));
+    expect(
+      out,
+      contains(
+        '{if(b.indexOf("MpNotoSansSC")<0)b.push("MpNotoSansSC");'
+        'var __mpMiss=m.a.a3D(n,b);if(__mpMiss.length!==0)m.aqk(__mpMiss)}},',
+      ),
+    );
     expect(out, isNot(contains('m.aqk(n)')));
   });
 
   test('--profile 产物同样认得', () {
     final out = patchFontFallback(_profile, family: 'MpNotoSansSC');
-    expect(out, contains('A._setArrayType(["Roboto","MpNotoSansSC"], type\$.JSArray_String)'));
-    expect(out, contains('{if(fontFamilies.indexOf("MpNotoSansSC")<0)fontFamilies.push("MpNotoSansSC");'
+    expect(
+      out,
+      contains(
+        'A._setArrayType(["Roboto","MpNotoSansSC"], type\$.JSArray_String)',
+      ),
+    );
+    expect(
+      out,
+      contains(
+        '{if(fontFamilies.indexOf("MpNotoSansSC")<0)fontFamilies.push("MpNotoSansSC");'
         'var __mpMiss=_this._registry.getMissingCodePoints\$2(codePoints,fontFamilies);'
-        'if(__mpMiss.length!==0)_this.addMissingCodePoints\$1(__mpMiss)};'));
+        'if(__mpMiss.length!==0)_this.addMissingCodePoints\$1(__mpMiss)};',
+      ),
+    );
   });
 
   test('补丁后的片段语义:只有真正缺的码点进入贪心', () async {
     final out = patchFontFallback(_minified, family: 'F');
     final start = out.indexOf('atP(a,b){');
     final end = out.indexOf('aqk(a){');
-    final method = out.substring(start, end).replaceFirst(RegExp(r'\},\s*$'), '}');
+    final method = out
+        .substring(start, end)
+        .replaceFirst(RegExp(r'\},\s*$'), '}');
     // 用最小桩跑一遍 atP:getMissingCodePoints 只认 family "F" 覆盖 20013(中)
-    final js = '''
+    final js =
+        '''
 var \$ = {}, B = {de: 1}, t = {S: 0};
 var A = {
   aR: () => { const s = new Set(); return { t: (_, x) => s.has(x), I: (_, x) => s.add(x), get a() { return s.size; }, \$ti: {c: 0}, s }; },
@@ -96,12 +142,34 @@ self.atP('中', ['Roboto']);
   });
 
   test('失配时点名是哪一处补丁,不静默产出', () {
-    expect(() => patchFontFallback('var x = 1;', family: 'F'),
-        throwsA(isA<TransformFailure>().having((e) => e.message, 'message', contains('补丁 A'))));
-    final noB = _minified.replaceFirst('if(m.a.a3D(n,b).length!==0)m.aqk(n)', 'm.aqk(n)');
-    expect(() => patchFontFallback(noB, family: 'F'),
-        throwsA(isA<TransformFailure>().having((e) => e.message, 'message', contains('补丁 B'))));
+    expect(
+      () => patchFontFallback('var x = 1;', family: 'F'),
+      throwsA(
+        isA<TransformFailure>().having(
+          (e) => e.message,
+          'message',
+          contains('补丁 A'),
+        ),
+      ),
+    );
+    final noB = _minified.replaceFirst(
+      'if(m.a.a3D(n,b).length!==0)m.aqk(n)',
+      'm.aqk(n)',
+    );
+    expect(
+      () => patchFontFallback(noB, family: 'F'),
+      throwsA(
+        isA<TransformFailure>().having(
+          (e) => e.message,
+          'message',
+          contains('补丁 B'),
+        ),
+      ),
+    );
     // 出现两处也要拒绝(说明结构变了,不能猜改哪处)
-    expect(() => patchFontFallback(_minified + _minified, family: 'F'), throwsA(isA<TransformFailure>()));
+    expect(
+      () => patchFontFallback(_minified + _minified, family: 'F'),
+      throwsA(isA<TransformFailure>()),
+    );
   });
 }

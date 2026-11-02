@@ -19,7 +19,7 @@ codes.
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.2
+  flutter_miniprogram: ^0.3.3
 ```
 
 A git dependency to this repository also works (public repo, no extra

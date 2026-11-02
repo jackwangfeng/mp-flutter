@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.3 — 2026-11-03
+
+- 新增 Flutter stable 3.47.4 构建支持,保留 3.41.9 与 flutter_ohos 支持。
+  适配新版 CanvasKit `unresolvedCodepoints()` 缺字检测,保留旧版字体补丁与失配检查。
+- 补齐新版图片编解码等待的 `<img>` load/error 事件,保留代理元素身份以复用解码结果;
+  实现 autofill 表单输入元素的 `replaceWith`,修正 static 表单残留偏移导致原生输入框隐藏。
+- CI 增加 3.41.9 / 3.47.4 矩阵;E2E 支持通过 `FLUTTER_BIN` 指定 SDK。
+  3.47.4 的微信开发者工具运行回归与真机验证状态见 `docs/support-matrix.md`。
+
 ## 0.3.2 — 2026-10-01
 
 ### 冲 pub.dev 满分:三包 README 英文化、补 example、修分析提示

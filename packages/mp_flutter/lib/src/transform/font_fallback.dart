@@ -20,7 +20,14 @@ import 'canvaskit_js.dart' show TransformFailure;
 /// 结构化匹配,不绑死 dart2js 的压缩名;压缩与 --profile(不压缩)两种写法都认。
 /// 失配时抛 [TransformFailure] 点名是哪一处,不静默产出缺补丁的文件——缺补丁
 /// 时合一字体虽然注册了,首屏照样拉几十个分片、多次整体重排,极难看出原因。
-String patchFontFallback(String source, {required String family}) {
+///
+/// [usesUnresolvedCodePoints] 用于 Flutter 3.47.4:引擎改为排版后读取 CanvasKit
+/// 的缺字列表,已经考虑全局回退字体,只需补丁 A 与新缺字入口的结构检查。
+String patchFontFallback(
+  String source, {
+  required String family,
+  bool usesUnresolvedCodePoints = false,
+}) {
   final famJs = jsonEncode(family);
   var out = source;
 
@@ -47,6 +54,20 @@ String patchFontFallback(String source, {required String family}) {
     am.start + robotoAt + '"Roboto"'.length,
     '"Roboto",$famJs',
   );
+
+  // Flutter 3.47.4 在 paragraph.layout 后通过 CanvasKit 获取真正缺失的码点。
+  // globalFontFallbacks 已参与 paragraph 的字体选择,无需再改写旧版缺字检测。
+  // 仍检查这个新入口,避免上游变化时静默略过补丁 B。
+  if (usesUnresolvedCodePoints) {
+    if (RegExp(r'\.unresolvedCodepoints\(\)').allMatches(out).length != 1) {
+      throw const TransformFailure(
+        '回退字体补丁 B(CanvasKit unresolvedCodepoints)',
+        '期望恰好 1 处 paragraph.unresolvedCodepoints(),请检查新引擎的缺字检测。',
+        file: 'main.dart.js',
+      );
+    }
+    return out;
+  }
 
   // ── 补丁 B:缺字检测 ──
   //   if (!(rune < 160 || known.contains(rune) || noFont.contains(rune))) runesToCheck.add(rune)

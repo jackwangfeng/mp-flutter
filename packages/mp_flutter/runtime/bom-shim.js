@@ -33,18 +33,15 @@ function withRecord(obj, name) {
     // target 而 shared.root 存的是代理,会导致"根节点自身"这一条链路的
     // isConnected 恒为 false(其余节点因为第一轮比较本就该是 false,不受影响,
     // 已用测试用例逐步验算过)。data property 读取不受 receiver 影响,故此改动
-    // 对现有行为零风险,只修复这一处根节点自检的边界 bug。set 陷阱不做同等改动:
-    // Reflect.set(target, key, value, receiver) 在 receiver !== target 且属性是
-    // 普通数据属性时,会转而对 receiver(代理自身)走 [[DefineOwnProperty]],
-    // 引入不必要的复杂度且现有 setter(value/selectionStart 等)都只做字段赋值、
-    // 不做恒等比较,没有该问题,故维持原样。
+    // setter 也必须保留 receiver:<img>.src 的自动解码按 this 登记 WeakMap,
+    // 若 this 是裸 target,引擎随后拿代理查图片就会找不到解码结果。
     get(t, k, receiver) {
       if (typeof k === 'symbol') return Reflect.get(t, k, receiver);
       if (k in t) return Reflect.get(t, k, receiver);
       hit(name + '.' + String(k) + ' →undefined');
       return undefined;
     },
-    set(t, k, v) { t[k] = v; return true; },
+    set(t, k, v, receiver) { return Reflect.set(t, k, v, receiver); },
     has(t, k) { return k in t; },
   });
 }
@@ -331,7 +328,23 @@ function makeElement(tag, ctx) {
     get selectionEnd() { return this._selEnd; },
     set selectionEnd(v) { this._selEnd = clampSel(v, this._value); },
     setSelectionRange(s, e) { this._selStart = clampSel(s, this._value); this._selEnd = clampSel(e, this._value); },
-    after() {}, before() {}, replaceWith() {},
+    after() {}, before() {},
+    replaceWith(...nodes) {
+      const parent = this._parent;
+      if (!parent || (nodes.length === 1 && nodes[0] === this)) return;
+      // 新版引擎复用 autofill form 时会替换 focused input。空实现会让
+      // document.activeElement 指向未接入文档的新 input,文本桥永远隐藏。
+      const replacements = new Set(nodes);
+      let next = parent.children[parent.children.indexOf(this) + 1];
+      while (next && replacements.has(next)) {
+        next = parent.children[parent.children.indexOf(next) + 1];
+      }
+      parent.removeChild(this);
+      for (const node of nodes) {
+        if (node && node._parent) node._parent._detach(node);
+        parent.insertBefore(node, next || null);
+      }
+    },
     closest() { return null; }, matches() { return false; },
     cloneNode() { return makeElement(tag, ctx); },
     getRootNode() { return null; },
@@ -503,7 +516,35 @@ function makeElement(tag, ctx) {
   }
 
   // <img>:引擎静态图解码路径(Blob → createObjectURL → img.decode()),见 image.js
-  if (String(tag).toLowerCase() === 'img' && ctx.images) ctx.images.initImageElement(el);
+  if (String(tag).toLowerCase() === 'img' && ctx.images) {
+    ctx.images.initImageElement(el);
+    let src = '', generation = 0, pending = null;
+    const decode = el.decode;
+    el.decode = function () { return pending || decode.call(this); };
+    Object.defineProperty(el, 'src', {
+      configurable: true, enumerable: true,
+      get() { return src; },
+      set(value) {
+        src = String(value == null ? '' : value);
+        const current = ++generation;
+        pending = null;
+        // 3.47.4 在调用 decode() 前等待 load 元数据。旧版直接 decode(),
+        // 没有 load 监听时仍沿用原路径,避免额外解码和所有权转移。
+        if (!src || !this._listeners || !(this._listeners.load || []).length) return;
+        const target = this;
+        const emit = (type) => {
+          if (generation === current) target.dispatchEvent(new shared.EV.Event(type));
+        };
+        if (!src.startsWith('blob:')) {
+          // 网络 URL 交给引擎的 fetch + CanvasKit 回退路径,不要挂起等 load。
+          Promise.resolve().then(() => emit('error'));
+          return;
+        }
+        pending = decode.call(this);
+        pending.then(() => emit('load'), () => emit('error'));
+      },
+    });
+  }
 
   // 按标签设置原型,必须在 withRecord 包装之前 —— el 是普通对象字面量,
   // setPrototypeOf 后自身属性全部保留;withRecord 的 Proxy 未定义

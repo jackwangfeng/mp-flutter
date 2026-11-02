@@ -3,6 +3,16 @@
 See the repository's [root CHANGELOG](https://github.com/jackwangfeng/mp-flutter/blob/main/CHANGELOG.md)
 for the full, detailed history (in Chinese) across all three packages.
 
+## 0.3.3 — 2026-11-03
+
+- Add Flutter 3.47.4 build support and adapt CJK font fallback to CanvasKit's
+  unresolved code point detection. Keep the existing 3.41.9 and OHOS paths.
+- Support image metadata load/error events and preserve proxy identity during
+  decoding. Implement autofill input replacement and ignore static form offsets
+  when positioning the native text input.
+- Add both stable versions to CI. All five Mini Program E2E suites and the
+  platform view semantics variant pass on 3.47.4; device validation is pending.
+
 ## 0.3.2 — 2026-10-01
 
 - pub.dev score: `README.md` is now English-primary (install/usage/config/

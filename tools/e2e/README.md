@@ -57,6 +57,16 @@ tools/e2e/run.sh ohos accept.js         # 只用 flutter_ohos 构建并跑 accep
 tools/e2e/run.sh android accept-pv.js   # 只用 --force-platform android 跑 accept-pv.js
 ```
 
+多版本回归可用 `FLUTTER_BIN` 显式指定 SDK。先用同一 SDK 在待测工程执行
+`flutter pub get`,再运行,例如:
+
+```bash
+(cd tools/e2e/apps/mpf_pv && /path/to/flutter-3.47.4/bin/flutter pub get)
+FLUTTER_BIN=/path/to/flutter-3.47.4/bin/flutter tools/e2e/run.sh stable accept-pv.js
+```
+
+`ohos` 配置仍优先使用 `FLUTTER_OHOS`。
+
 流程:对每个脚本,先构建对应验收工程,产物落
 `tools/e2e/out/<app>-<config>/`(每次构建前清空该目录),再跑对应
 `accept-*.js` 断言。已知偶发(一次运行里小程序在开发者工具里被启动两次,

@@ -86,6 +86,31 @@ test('Blob/URL 同时挂在 window 与 self 上', () => {
   assert.strictEqual(typeof w.URL.revokeObjectURL, 'function');
 });
 
+test('3.47.4:设置 blob src 后先触发 load 元数据,随后 decode 不重复解码', async () => {
+  const { doc, w, CK, shim } = setup();
+  const img = doc.createElement('img');
+  const loaded = new Promise((resolve) => img.addEventListener('load', resolve));
+  img.src = w.URL.createObjectURL(new w.Blob([PNG().buffer]));
+  await loaded;
+  assert.strictEqual(img.naturalWidth, 64);
+  await img.decode();
+  assert.strictEqual(CK.decoded, 1);
+  assert.strictEqual(shim.images.owns(img), true);
+  const sk = CK.MakeLazyImageFromTextureSource(img);
+  assert.strictEqual(sk.width(), 64);
+});
+
+test('3.47.4:网络 src 触发 error,允许引擎走 fetch 解码回退', async () => {
+  const { doc } = setup();
+  const img = doc.createElement('img');
+  let loaded = false;
+  img.addEventListener('load', () => { loaded = true; });
+  const failed = new Promise((resolve) => img.addEventListener('error', resolve));
+  img.src = 'https://example.test/image.png';
+  await failed;
+  assert.strictEqual(loaded, false);
+});
+
 test('Blob 拼接 ArrayBuffer / TypedArray / 字符串 / Blob 各部分', async () => {
   const { w } = setup();
   const inner = new w.Blob(['z']);

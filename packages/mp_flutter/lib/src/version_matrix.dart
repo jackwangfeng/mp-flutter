@@ -52,8 +52,12 @@ class FlutterVersion {
 }
 
 class VersionMatrix {
-  /// 已通过回归套件验证的版本。新增版本前必须先跑 tools/e2e。
-  static const supported = <String>['3.41.9', '3.41.10-ohos-0.0.2-beta'];
+  /// 支持构建的版本;各版本的运行验收状态见 docs/support-matrix.md。
+  static const supported = <String>[
+    '3.41.9',
+    '3.47.4',
+    '3.41.10-ohos-0.0.2-beta',
+  ];
 
   /// 已知的版本分叉差异映射。
   static const _knownDivergences = <String, List<KnownDivergence>>{

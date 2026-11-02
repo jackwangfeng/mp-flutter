@@ -160,8 +160,12 @@ function accumulateGeometry(el) {
   let n = el;
   while (n && n.style) {
     const t = parseTranslate(n.style.transform);
-    x += t.x + px(n.style.left);
-    y += t.y + px(n.style.top);
+    // static 元素的 top/left 不参与 CSS 布局。3.47.4 会把 dormant
+    // autofill form 的这两项设为 -9999px,但 form 本身未定位;恢复输入时
+    // 仍保留这些值。把它们叠加会错误隐藏已经重新聚焦的输入框。
+    const positioned = n.style.position && n.style.position !== 'static';
+    x += t.x + (positioned ? px(n.style.left) : 0);
+    y += t.y + (positioned ? px(n.style.top) : 0);
     if (tagOf(n) === 'FLT-SEMANTICS-HOST') {
       const s = parseHostScale(n.style.transform);
       if (s != null) hostScale = s;

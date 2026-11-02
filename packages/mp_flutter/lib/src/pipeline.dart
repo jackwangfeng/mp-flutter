@@ -262,7 +262,11 @@ Future<SizeReport> runPipeline({
   // 这里只防组合不合法(与常规不同档会出豆腐块,见 cjk_font.dart)
   if (cjkFontBold != null) resolveCjkBoldLevel(cjkFont, cjkFontBold);
   final mainJsPatched = cjkFont != null
-      ? patchFontFallback(mainJsRaw, family: kCjkFontFamily)
+      ? patchFontFallback(
+          mainJsRaw,
+          family: kCjkFontFamily,
+          usesUnresolvedCodePoints: version.version == '3.47.4',
+        )
       : mainJsRaw;
   // 正则 Unicode 属性转义 \p{…} 改写成码点区间(安卓微信 JS 引擎不带 ICU,
   // 不支持;Flutter text_painter 插入文字时会构造,见 transform/unicode_property_escapes.dart)。
