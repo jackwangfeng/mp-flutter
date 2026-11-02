@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/github/license/jackwangfeng/mp-flutter)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/jackwangfeng/mp-flutter)](https://github.com/jackwangfeng/mp-flutter/releases)
-[![Flutter](https://img.shields.io/badge/Flutter-3.41.9%20stable-02569B?logo=flutter&logoColor=white)](docs/support-matrix.md)
+[![Flutter](https://img.shields.io/badge/Flutter-3.41.9%20%7C%203.47.4-02569B?logo=flutter&logoColor=white)](docs/support-matrix.md)
 [![Platform](https://img.shields.io/badge/platform-WeChat%20Mini%20Program-07C160?logo=wechat&logoColor=white)](https://developers.weixin.qq.com/miniprogram/dev/framework/)
 
 **Run unmodified Flutter apps as WeChat Mini Programs** — Flutter Web + CanvasKit compiled straight into a 微信小程序 (WeChat Mini Program), zero Dart code changes, real-device verified on iOS and Android.
@@ -81,7 +81,7 @@ Precedence is **CLI flag > `mp_flutter.yaml` > default**.
 
 ## Support Matrix
 
-Verified against Flutter stable **3.41.9** and the `flutter_ohos` fork **3.41.10-ohos-0.0.2-beta**. **3.47.4** also passes all five Mini Program E2E suites and the platform view semantics variant in WeChat DevTools; device validation is pending. Node **≥18**; WeChat Mini Program base library **≥3.15.0**. Each platform bridge has its own verification status and known caveats in [`docs/support-matrix.md`](docs/support-matrix.md).
+Verified against Flutter stable **3.41.9** and the `flutter_ohos` fork **3.41.10-ohos-0.0.2-beta**. **3.47.4** requires **flutter_miniprogram ≥0.3.3** and passes all five Mini Program E2E suites plus the platform view semantics variant in WeChat DevTools. Map display has also been confirmed on a physical device; other device checks remain pending. Node **≥18**; WeChat Mini Program base library **≥3.15.0**. Each platform bridge has its own verification status and known caveats in [`docs/support-matrix.md`](docs/support-matrix.md).
 
 ## Capabilities & Limitations
 

@@ -15,6 +15,13 @@ list, support matrix, known limitations) lives in the repository root
 page only covers the package itself: CLI usage, configuration file, exit
 codes.
 
+## Supported Flutter versions
+
+Version **0.3.3** adds Flutter **3.47.4** support and keeps **3.41.9** and
+**3.41.10-ohos-0.0.2-beta** support. Other SDK versions are rejected until
+validated. See the [support matrix](https://github.com/jackwangfeng/mp-flutter/blob/main/docs/support-matrix.md)
+for runtime checks and device limitations.
+
 ## Install
 
 ```yaml

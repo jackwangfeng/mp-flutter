@@ -61,7 +61,8 @@ node --test tools/mp-context/*.test.js
 step "2/6 node --test packages/mp_flutter/js/test/*.test.js"
 node --test packages/mp_flutter/js/test/*.test.js
 
-step "3/6 dart analyze(packages/mp_flutter)"
+step "3/6 dart pub get + dart analyze(packages/mp_flutter)"
+(cd packages/mp_flutter && dart pub get)
 (cd packages/mp_flutter && dart analyze)
 
 step "4/6 dart test(packages/mp_flutter,含 tag=slow 消费者冒烟)"

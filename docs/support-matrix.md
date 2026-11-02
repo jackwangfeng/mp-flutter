@@ -19,7 +19,7 @@
 | 项 | 要求/已验证版本 | 备注 |
 |---|---|---|
 | Flutter(stable) | **3.41.9** | 已跑过完整回归套件;换版本前须先跑一遍 `tools/e2e/run.sh stable`(见 `packages/mp_flutter/lib/src/version_matrix.dart`) |
-| Flutter(stable) | **3.47.4** | 构建、完整 CI、微信开发者工具五项 E2E 与平台视图伴生层验收通过;适配字体回退、图片元数据事件与 autofill 输入恢复。真机待验 |
+| Flutter(stable) | **3.47.4** | 需 flutter_miniprogram ≥0.3.3;本地完整 CI、微信开发者工具五项 E2E 与平台视图伴生层验收通过;真机地图显示已反馈正常,其他真机能力待验 |
 | Flutter(`flutter_ohos` fork) | **3.41.10-ohos-0.0.2-beta** | 已知与 stable 的产物差异:未打包 Material shaders(`ink_sparkle.frag`、`stretch_effect.frag`)——用到 `InkSparkle` 水波纹或 overscroll 拉伸效果的 App 运行时会取不到这两个资源 |
 | Node.js | **≥ 18** | `main.dart.js` 分片(`packages/mp_flutter/js/split.js`)与 esbuild 自动安装均依赖 Node;`dart run flutter_miniprogram doctor` 会检查 |
 | `brotli` | — | 压缩 `canvaskit.wasm` 依赖它,macOS/Linux 都不预装;macOS `brew install brotli`,Debian/Ubuntu(含 CI)`apt install brotli`;缺失时构建以退出码 6 失败,`doctor` 会检查 |

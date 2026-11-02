@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/github/license/jackwangfeng/mp-flutter)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/jackwangfeng/mp-flutter)](https://github.com/jackwangfeng/mp-flutter/releases)
-[![Flutter](https://img.shields.io/badge/Flutter-3.41.9%20stable-02569B?logo=flutter&logoColor=white)](docs/support-matrix.md)
+[![Flutter](https://img.shields.io/badge/Flutter-3.41.9%20%7C%203.47.4-02569B?logo=flutter&logoColor=white)](docs/support-matrix.md)
 [![Platform](https://img.shields.io/badge/platform-WeChat%20Mini%20Program-07C160?logo=wechat&logoColor=white)](https://developers.weixin.qq.com/miniprogram/dev/framework/)
 
 把现有 Flutter 工程编译成微信小程序,主工程零代码改动。
@@ -67,7 +67,8 @@ esbuild 首次使用会自动安装,不需要提前装。**只支持 macOS/Linux
 ## 支持矩阵
 
 已验证 Flutter stable **3.41.9 / 3.47.4**、`flutter_ohos` **3.41.10-ohos-0.0.2-beta**;
-3.47.4 已通过开发者工具运行回归,真机待验。
+3.47.4 请使用 **flutter_miniprogram ≥0.3.3**;已通过开发者工具运行回归,
+并收到真机地图显示正常的反馈,其他真机能力仍按支持矩阵逐项验收。
 Node **≥18**;微信小程序基础库 **≥3.15.0**。每个平台桥(渲染/触摸/文本输入/
 网络/存储/图片/字体/路由/微信能力/原生组件/伴生层)的验证状态与已知限制,
 完整版见 [`docs/support-matrix.md`](docs/support-matrix.md)。

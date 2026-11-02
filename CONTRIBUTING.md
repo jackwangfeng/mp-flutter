@@ -2,7 +2,7 @@
 
 ## 开发环境
 
-- **Flutter**:stable **3.41.9**(默认从 `$HOME/development/flutter/bin/flutter`
+- **Flutter**:stable **3.41.9 / 3.47.4**(默认从 `$HOME/development/flutter/bin/flutter`
   自动探测,可用 `FLUTTER_BIN` 环境变量或各脚本的 `--flutter` 覆盖)。改
   `flutter_ohos` 相关代码时还需要一份 `flutter_ohos` **3.41.10-ohos-0.0.2-beta**
   SDK,路径经环境变量 `FLUTTER_OHOS` 提供

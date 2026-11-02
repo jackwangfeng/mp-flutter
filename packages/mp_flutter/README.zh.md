@@ -13,6 +13,12 @@
 [README](https://github.com/jackwangfeng/mp-flutter#readme)。本页只讲这个包
 本身:CLI 用法、配置文件、退出码。
 
+## Flutter 版本支持
+
+**0.3.3** 新增 Flutter **3.47.4** 支持,继续兼容 **3.41.9** 和
+**3.41.10-ohos-0.0.2-beta**。其他 SDK 版本尚未验证,构建时会明确拒绝。
+运行验收结果与真机限制见[支持矩阵](https://github.com/jackwangfeng/mp-flutter/blob/main/docs/support-matrix.md)。
+
 ## 安装
 
 ```yaml
