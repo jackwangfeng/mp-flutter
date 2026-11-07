@@ -35,7 +35,7 @@ cjk_font: false
 - 微信能力桥及原生地图、视频、相机桥关闭。登录、支付等抖音专用能力尚未实现。
 - 默认使用抖音标准导航栏，避免未申请自定义导航栏权限时无法正常发布。
 - 抖音默认 framebuffer 在模拟器中没有 stencil；保留真实 GL 能力值，允许 CanvasKit 自行管理渲染目标，已做三角形裁剪像素验收。微信严格 stencil 检查保留。
-- 网络、存储、输入复用宿主接口，但仍需抖音模拟器和手机分别验收。隐私声明和域名须按平台要求配置。
+- 网络、存储、输入复用宿主接口，模拟器已验证 GET/POST 中文回显、网络图片、跨重启存储和中文/emoji 输入。手机上的这些扩展能力仍待逐项确认；请求和图片域名须在抖音后台配置。
 
 按所用 API 的官方最低版本，基础库至少需 2.92；这只是 API 下限，尚非经过验证的兼容范围。微信的支持矩阵不能直接套用到抖音。
 
@@ -49,5 +49,30 @@ cjk_font: false
 - 中文、资源图片显示正常。
 - 非矩形裁剪：三角形外侧像素为橙色 (255,122,61)，内部为绿色 (110,231,168)。
 - 同一窗口连续两次点击，画面计数及 STATE 日志由 0 → 1 → 2。
-- 389 项 Dart 测试通过，1 项跳过；388 项运行时 JS 测试通过，静态分析通过。
+- 390 项 Dart 测试通过，1 项跳过；391 项运行时 JS 测试通过，静态分析通过。
 - 用户反馈该预览在真机运行正常（中文、图片、三角形裁剪、点击计数）。设备型号、系统和抖音版本未记录，不扩展为 iOS/Android 全矩阵通过。
+
+### 扩展验收
+
+- 本地回环后端：GET 和 POST 均回显完整的 `你好😀`，网络图片解码显示成功。
+- 外网 HTTPS：抖音原生请求的 UTF-8 查询与二进制响应返回 200。
+- shared_preferences 跨编译重启读取到之前计数并成功递增。
+- 点击 Canvas 中的 Flutter TextField 后输入 `发布验证世界😀`，Flutter 收到 onChanged；调用原生确认事件入口后 onSubmitted 收到相同内容。该项验证事件桥，不等于手机软键盘所有行为均通过。
+- 修复 Dart HTTP 客户端传数值 Content-Length 时抖音请求异常的问题：tt 请求头转换为字符串，Content-Length 由宿主计算。
+
+可复跑的本地网络验收（仅模拟器）：
+
+```sh
+node tools/e2e/douyin-server.js
+# 另一个终端：
+dart run packages/mp_flutter/bin/flutter_miniprogram.dart \
+  --platform douyin --project tools/e2e/apps/mpf_douyin \
+  --appid <appid> --verify \
+  --dart-define MPF_DOUYIN_TEST_ORIGIN=http://127.0.0.1:18883 \
+  --dart-define MPF_DOUYIN_IMAGE_ORIGIN=http://127.0.0.1:18883
+```
+
+默认示例请求 Postman Echo 和 httpbin，测试服务有可用性限制。模拟器若连原生
+`tt.request` 都报 `protocol mismatch`，检查 IDE 进程继承的代理环境变量；
+本次通过不继承终端代理变量的 IDE 进程验证，未修改系统代理。不要将该类错误与
+Flutter 适配问题混为一谈。正式业务使用自己的 HTTPS 服务与已配置的域名。
