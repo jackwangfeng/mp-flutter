@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'config.dart' show kLocationScopePrivateInfos;
+import 'config.dart' show kLocationScopePrivateInfos, kNavigationBarTextStyles;
 
 class ProjectFiles {
   /// 相对产物根目录的路径 → 文件内容
@@ -191,6 +191,7 @@ String _splashWxss(String bg) {
 /// 执行;各分包的占位页 p/p 从不访问,本来就不该注入。收益很小,但无害。
 ProjectFiles emitProject({
   required String appId,
+  String navigationBarTextStyle = 'black',
   required List<String> subPackageRoots,
   required String entryPagePath,
   List<String>? preloadRoots,
@@ -204,6 +205,13 @@ ProjectFiles emitProject({
   bool initialRenderingCache = false,
   bool lazyCodeLoading = false,
 }) {
+  if (!kNavigationBarTextStyles.contains(navigationBarTextStyle)) {
+    throw ArgumentError.value(
+      navigationBarTextStyle,
+      'navigationBarTextStyle',
+      '只能是 black / white',
+    );
+  }
   final enc = const JsonEncoder.withIndent('  ');
   final preload = preloadRoots ?? subPackageRoots;
   final splashBg = normalizeSplashColor(splashColor);
@@ -236,6 +244,7 @@ ProjectFiles emitProject({
       },
     'window': {
       'navigationStyle': 'custom',
+      'navigationBarTextStyle': navigationBarTextStyle,
       'backgroundColor': '#000000',
       if (splashTitle.isNotEmpty) 'navigationBarTitleText': splashTitle,
     },

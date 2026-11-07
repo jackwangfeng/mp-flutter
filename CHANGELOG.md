@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4 — 2026-11-07
+
+- 新增 `navigation_bar_text_style` / `--navigation-bar-text-style` 状态栏文字和图标颜色配置,支持 black / white,默认 black;写入 app.json 的 window.navigationBarTextStyle。
+  默认从微信未配置时的浅色文字改为黑色;深色页面请显式配置 white。
+
 ## 0.3.3 — 2026-11-03
 
 - 新增 Flutter stable 3.47.4 构建支持,保留 3.41.9 与 flutter_ohos 支持。

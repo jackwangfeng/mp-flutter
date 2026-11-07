@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4 — 2026-11-07
+
+- Add `navigation_bar_text_style` / `--navigation-bar-text-style` (`black` or `white`, default `black`) to configure status bar text and icons in generated app.json.
+  Dark pages should explicitly select `white`; the previous implicit WeChat default was white.
+
 See the repository's [root CHANGELOG](https://github.com/jackwangfeng/mp-flutter/blob/main/CHANGELOG.md)
 for the full, detailed history (in Chinese) across all three packages.
 

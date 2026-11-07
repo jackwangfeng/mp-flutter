@@ -26,7 +26,7 @@
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.3
+  flutter_miniprogram: ^0.3.4
 ```
 
 也可以用 git 依赖引入本仓库(公开仓库,无需额外凭证;`ref` 建议固定到一个
@@ -39,7 +39,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.3.3
+      ref: v0.3.4
 ```
 
 **2. 编译**——工程根跑一条命令(先跑 `dart run flutter_miniprogram doctor`
@@ -63,6 +63,15 @@ esbuild 首次使用会自动安装,不需要提前装。**只支持 macOS/Linux
 需要微信能力(登录/支付/扫码等)或原生组件(视频/地图/相机)时,额外引入
 `package:mp_flutter_wechat`/`package:mp_flutter_native`,见下方「能力与限制」
 与两个包各自的 README。
+
+状态栏文字和图标颜色可在工程的 `mp_flutter.yaml` 单独配置:
+
+```yaml
+navigation_bar_text_style: black  # 默认值,浅色页面用 black,深色页面用 white
+```
+
+也可用 `dart run flutter_miniprogram --navigation-bar-text-style white` 临时覆盖。
+配置会写入生成的 `app.json` 的 `window.navigationBarTextStyle`,修改后需重新构建。
 
 ## 支持矩阵
 
@@ -191,7 +200,7 @@ dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter_wechat
-      ref: v0.3.3
+      ref: v0.3.4
 ```
 
 ```dart

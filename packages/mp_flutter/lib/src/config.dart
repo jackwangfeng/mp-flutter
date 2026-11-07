@@ -97,6 +97,7 @@ bool _dependsOnFlutter(String pubspecYaml) {
 /// `mp_flutter.yaml`(可选,位于工程根)里认识的键。
 const kKnownConfigKeys = <String>{
   'appid',
+  'navigation_bar_text_style',
   'output',
   'flutter',
   'esbuild',
@@ -124,6 +125,9 @@ const kKnownConfigKeys = <String>{
   'android_input',
   'input_timing',
 };
+
+/// 状态栏文字和图标颜色,映射 app.json window.navigationBarTextStyle。
+const kNavigationBarTextStyles = ['black', 'white'];
 
 /// `android_input` / `--android-input`:安卓上原生输入框放哪(offscreen 默认 /
 /// overlay)。与 pipeline.dart 的 `kAndroidInputModes` 同一份取值。
@@ -186,6 +190,7 @@ const kLocationScopePrivateInfos = <String>{
 /// 默认值"的优先级合并)。
 class MpFlutterConfig {
   final String? appId;
+  final String? navigationBarTextStyle;
   final String? output;
   final String? flutter;
   final String? esbuild;
@@ -230,6 +235,7 @@ class MpFlutterConfig {
 
   const MpFlutterConfig({
     this.appId,
+    this.navigationBarTextStyle,
     this.output,
     this.flutter,
     this.esbuild,
@@ -419,6 +425,10 @@ MpFlutterConfig loadConfig(
 
   return MpFlutterConfig(
     appId: asString('appid'),
+    navigationBarTextStyle: asEnum(
+      'navigation_bar_text_style',
+      kNavigationBarTextStyles,
+    ),
     output: asString('output'),
     flutter: asString('flutter'),
     esbuild: asString('esbuild'),

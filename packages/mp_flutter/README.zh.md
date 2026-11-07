@@ -23,7 +23,7 @@
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.3
+  flutter_miniprogram: ^0.3.4
 ```
 
 也可以用 git 依赖引入本仓库(公开仓库,无需额外凭证;`ref` 建议固定到一个
@@ -79,6 +79,7 @@ dart run flutter_miniprogram e2e-driver
 | `--semantics-mirror` | 开启 WXML 伴生层(语义树镜像),默认关闭 |
 | `--perf-hud` | 开启真机性能测量(`[mp-perf]`/`[mp-boot]` 控制台日志 + 左上角浮层),默认关闭。见下方「真机性能测量」 |
 | `--input-timing` | 输入计时诊断:每个输入相关事件打一行 `[mp-t]`(触摸、引擎焦点、状态下发、setData、原生 focus/blur/input 带完整 `e.detail`、键盘高度、Flutter 排版到这次输入的文字、上屏帧),并估算按键到 JS 的延迟。默认关闭,关闭时不打包、不注入 |
+| `--navigation-bar-text-style=black\|white` | 状态栏文字和图标颜色。默认 `black`,适合浅色页面;深色页面用 `white`。覆盖 YAML 的 `navigation_bar_text_style` |
 | `--android-input=offscreen\|overlay` | 安卓上原生输入框放哪:`offscreen`(默认)= 水平移出可视区、竖直位置不变(安卓原生光标设不成透明,叠放会有两根光标);`overlay` = 与 iOS 一样透明叠在输入框上。iOS 始终叠放 |
 | `--no-shader-warmup` | 关闭着色器预热(默认开):首帧之后趁空闲,在引擎的 GrDirectContext 上把常见绘制组合各画一遍,让 GL program 提前编译,首次进入列表/卡片页时不再当帧编译(iOS 无 JIT 时单个 program 百 ms 级)。不占冷启动,有动画/滚动/触摸时暂停;轻项一片最多攒 8ms,阴影/模糊等重项拆到最细粒度、要求连续空闲 1s 才画、每片一个 |
 | `--shader-warmup-light` | 着色器预热只画轻项(文字/纯色/图片/圆/描边/路径等),跳过阴影/`BoxShadow`/`BackdropFilter`/颜色矩阵等重项(真机上单个 program 可达上百 ms)。默认关闭,对 `--no-shader-warmup` 无效 |
@@ -133,6 +134,7 @@ private_infos: [chooseLocation, choosePoi]   # 与 --private-info 合并去重
 semantics_mirror: false
 perf_hud: false
 # input_timing: false          # 输入计时诊断 [mp-t](同 --input-timing)
+navigation_bar_text_style: black  # 状态栏文字/图标:black(默认)/ white
 # android_input: offscreen     # 安卓原生输入框:offscreen(默认)/ overlay,同 --android-input
 shader_warmup: true            # 首帧后空闲时预热着色器(同 --no-shader-warmup 关闭)
 # shader_warmup_light: true     # 预热只画轻项、跳过重项(同 --shader-warmup-light)

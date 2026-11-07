@@ -19,7 +19,7 @@ import 'package:flutter_miniprogram/src/package_root.dart';
 /// 手动与 pubspec.yaml 的 `version:` 保持一致——Dart 没有开销对等的运行时
 /// 方式读取自身包的 pubspec 只为取一个版本号(`resolvePackageRoot()` 倒是能
 /// 定位到包根,但读文件+解析 YAML 只为一个字符串不值得),这两处都极少改动。
-const kPackageVersion = '0.3.3';
+const kPackageVersion = '0.3.4';
 
 /// [runPipeline] 的签名,供 `runCli` 测试注入——单测不应该真的跑一遍
 /// `flutter build web`。
@@ -28,6 +28,7 @@ typedef PipelineRunner =
       required String projectPath,
       required String outputPath,
       required String appId,
+      String navigationBarTextStyle,
       String? flutterBin,
       String? esbuildPath,
       bool profile,
@@ -151,6 +152,13 @@ ArgParser buildArgParser() {
           '并估算按键到 JS 的延迟。默认关闭:关闭时不打包、不注入任何相关代码。'
           '可被 mp_flutter.yaml 的 input_timing 覆盖。',
       defaultsTo: false,
+    )
+    ..addOption(
+      'navigation-bar-text-style',
+      allowed: kNavigationBarTextStyles,
+      help:
+          '状态栏文字和图标颜色:black(默认,适合浅色页面)/white(适合深色页面)。'
+          '可在 mp_flutter.yaml 中设置 navigation_bar_text_style。',
     )
     ..addOption(
       'android-input',
@@ -546,6 +554,11 @@ Future<int> runCli(
     config.lazyCodeLoading,
     true,
   );
+  final navigationBarTextStyle = pickStr(
+    'navigation-bar-text-style',
+    config.navigationBarTextStyle,
+    'black',
+  );
   final androidInput = pickStr(
     'android-input',
     config.androidInput,
@@ -621,6 +634,7 @@ Future<int> runCli(
       projectPath: projectPath,
       outputPath: outputPath,
       appId: appId,
+      navigationBarTextStyle: navigationBarTextStyle,
       flutterBin: flutterBin,
       esbuildPath: esbuildPath,
       profile: args['profile'] as bool,

@@ -5,7 +5,12 @@ import 'package:yaml/yaml.dart';
 
 import 'asset_pipeline.dart';
 import 'cjk_font.dart';
-import 'config.dart' show kPreloadModes, kCjkBoldTimings, kBootAssetsModes;
+import 'config.dart'
+    show
+        kPreloadModes,
+        kCjkBoldTimings,
+        kBootAssetsModes,
+        kNavigationBarTextStyles;
 import 'emit_project.dart';
 import 'entrypoint.dart';
 
@@ -58,6 +63,7 @@ Future<SizeReport> runPipeline({
   required String projectPath,
   required String outputPath,
   required String appId,
+  String navigationBarTextStyle = 'black',
   String? flutterBin,
   String? esbuildPath,
   bool profile = false,
@@ -89,6 +95,13 @@ Future<SizeReport> runPipeline({
   String androidInput = 'offscreen',
   bool inputTiming = false,
 }) async {
+  if (!kNavigationBarTextStyles.contains(navigationBarTextStyle)) {
+    throw ArgumentError.value(
+      navigationBarTextStyle,
+      'navigationBarTextStyle',
+      '只能是 black / white',
+    );
+  }
   // 参数错误在构建前暴露,不白等一次 flutter build
   buildHostPageJs(
     verify: verify,
@@ -590,6 +603,7 @@ Future<SizeReport> runPipeline({
   }
   final proj = emitProject(
     appId: appId,
+    navigationBarTextStyle: navigationBarTextStyle,
     subPackageRoots: subPackages,
     entryPagePath: _entryPage,
     // 占位页是 emitProject 之后才计入各包的,额度留 8KB 余量

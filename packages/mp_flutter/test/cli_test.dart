@@ -94,6 +94,7 @@ void main() {
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -155,6 +156,7 @@ void main() {
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -207,6 +209,7 @@ void main() {
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -263,6 +266,7 @@ void main() {
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -318,6 +322,7 @@ void main() {
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -378,6 +383,7 @@ void main() {
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -467,6 +473,7 @@ void main() {
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -585,6 +592,7 @@ void main() {
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -653,6 +661,7 @@ require_location: true
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -713,6 +722,7 @@ require_location: true
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -762,6 +772,7 @@ require_location: true
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -816,6 +827,7 @@ some_unknown_future_key: 1
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -869,6 +881,7 @@ esbuild: tools/esbuild/bin/esbuild
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -920,6 +933,7 @@ esbuild: tools/esbuild/bin/esbuild
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -971,6 +985,7 @@ esbuild: tools/esbuild/bin/esbuild
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1031,6 +1046,7 @@ private_infos: [chooseLocation, getFuzzyLocation]
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1085,6 +1101,7 @@ private_infos: [chooseLocation]
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1136,6 +1153,7 @@ private_infos: [chooseLocation]
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1188,6 +1206,7 @@ private_infos: [notARealApi]
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1238,6 +1257,7 @@ private_infos: [notARealApi]
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1291,6 +1311,7 @@ private_infos: [notARealApi]
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1349,6 +1370,7 @@ private_infos: [notARealApi]
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1396,6 +1418,7 @@ private_infos: [notARealApi]
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1444,6 +1467,7 @@ private_infos: [notARealApi]
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1492,6 +1516,7 @@ private_infos: [notARealApi]
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1558,6 +1583,7 @@ private_infos: [notARealApi]
           bool initialRenderingCache = true,
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1853,6 +1879,7 @@ esbuild: tools/esbuild/bin/esbuild
       bool initialRenderingCache = true,
       bool lazyCodeLoading = true,
       String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
       bool inputTiming = false,
       List<String> dartDefines = const [],
       String? dartDefineFromFile,
@@ -1971,7 +1998,8 @@ esbuild: tools/esbuild/bin/esbuild
           String? splashColor, String preload = 'auto', String cjkFontBoldTiming = 'after_first_frame',
           bool earlyWasm = true, String bootAssets = 'auto', bool initialRenderingCache = true,
           bool lazyCodeLoading = true, List<String> dartDefines = const [], String? dartDefineFromFile,
-          bool safeArea = true, String? target, String androidInput = 'offscreen', bool inputTiming = false,
+          bool safeArea = true, String? target, String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black', bool inputTiming = false,
         }) async {
           seen = {'preload': preload, 'bold': cjkFontBoldTiming, 'early': earlyWasm, 'boot': bootAssets,
             'irc': initialRenderingCache, 'lazy': lazyCodeLoading, 'ai': androidInput, 'it': inputTiming};
@@ -2004,4 +2032,70 @@ esbuild: tools/esbuild/bin/esbuild
       expect(await runCli(['--project', '/p', '--preload', 'fast'], stderrSink: StringBuffer()), 64);
     });
   });
+  test('状态栏颜色:默认 black、YAML white、CLI 优先,非法值退出码 64', () async {
+    final dir = Directory.systemTemp.createTempSync('mpf-status-bar-');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final yaml = File(p.join(dir.path, 'mp_flutter.yaml'));
+    String? seen;
+    var calls = 0;
+    Future<SizeReport> runner({
+          required String projectPath,
+          required String outputPath,
+          required String appId,
+          String? flutterBin,
+          String? esbuildPath,
+          bool profile = false,
+          bool verify = false,
+          int? dartChunkBudgetBytes,
+          String? forcePlatform,
+          bool requireLocation = false,
+          List<String> privateInfos = const [],
+          bool semanticsMirror = false,
+          bool perfHud = false,
+          bool licenses = true,
+          bool shaderWarmup = true,
+          bool shaderWarmupLight = false,
+          String? cjkFont = 'level1',
+          String? cjkFontBold,
+          String? fontBaseUrl,
+          String? splashTitle,
+          String? splashColor,
+          String preload = 'auto',
+          String cjkFontBoldTiming = 'after_first_frame',
+          bool earlyWasm = true,
+          String bootAssets = 'auto',
+          bool initialRenderingCache = true,
+          bool lazyCodeLoading = true,
+          String androidInput = 'offscreen',
+          String navigationBarTextStyle = 'black',
+          bool inputTiming = false,
+          List<String> dartDefines = const [],
+          String? dartDefineFromFile,
+          bool safeArea = true,
+          String? target,
+        }) async {
+      calls++;
+      seen = navigationBarTextStyle;
+      return SizeReport(const {}, const []);
+    }
+    Future<int> run(List<String> extra) => runCli(
+      ['--project', dir.path, ...extra], pipelineRunner: runner,
+      stdoutSink: StringBuffer(), stderrSink: StringBuffer(),
+    );
+    expect(await run([]), 0);
+    expect(seen, 'black');
+    yaml.writeAsStringSync('navigation_bar_text_style: white\n');
+    expect(await run([]), 0);
+    expect(seen, 'white');
+    expect(await run(['--navigation-bar-text-style', 'black']), 0);
+    expect(seen, 'black');
+    expect(await run(['--navigation-bar-text-style', 'white']), 0);
+    expect(seen, 'white');
+    final previousCalls = calls;
+    expect(await run(['--navigation-bar-text-style', 'red']), 64);
+    yaml.writeAsStringSync('navigation_bar_text_style: red\n');
+    expect(await run([]), 64);
+    expect(calls, previousCalls);
+  });
+
 }

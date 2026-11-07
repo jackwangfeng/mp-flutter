@@ -540,4 +540,17 @@ private_infos: [notARealApi]
       expect(() => load('input_timing: 1\n'), throwsA(isA<ConfigParseFailure>()));
     });
   });
+  test('状态栏颜色配置只接受 black / white,未配置保持 null', () {
+    MpFlutterConfig load(String yaml) => loadConfig('/r',
+      fileExists: (_) => true, readFile: (_) => yaml, warn: (_) {});
+    expect(load('appid: x\n').navigationBarTextStyle, isNull);
+    for (final style in ['black', 'white']) {
+      expect(load('navigation_bar_text_style: $style\n').navigationBarTextStyle, style);
+    }
+    for (final invalid in ['red', 'BLACK', '1', 'true', '[black]']) {
+      expect(() => load('navigation_bar_text_style: $invalid\n'),
+        throwsA(isA<ConfigParseFailure>()));
+    }
+  });
+
 }

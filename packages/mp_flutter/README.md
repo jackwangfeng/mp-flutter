@@ -26,7 +26,7 @@ for runtime checks and device limitations.
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.3
+  flutter_miniprogram: ^0.3.4
 ```
 
 A git dependency to this repository also works (public repo, no extra
@@ -86,6 +86,7 @@ dart run flutter_miniprogram e2e-driver
 | `--semantics-mirror` | Enable the WXML companion layer (semantic tree mirror), off by default |
 | `--perf-hud` | Enable on-device performance measurement (`[mp-perf]`/`[mp-boot]` console logs + a top-left overlay), off by default. See "On-device performance measurement" below |
 | `--input-timing` | Input-timing diagnostics: log one `[mp-t]` line per input-related event (touch, engine focus, state dispatch, setData, native focus/blur/input with full `e.detail`, keyboard height, Flutter-layout-to-committed-frame text), and estimate keypress-to-JS latency. Off by default; when off, nothing related is bundled or injected |
+| `--navigation-bar-text-style=black\|white` | Status bar text and icon color. Defaults to `black` for light pages; use `white` for dark pages. Overrides `navigation_bar_text_style` in `mp_flutter.yaml`. |
 | `--android-input=offscreen\|overlay` | Where to place the native input box on Android: `offscreen` (default) = moved horizontally out of the visible area while keeping its vertical position (Android's native cursor can't be made transparent, so stacking it would show two cursors); `overlay` = transparently stacked on top of the input box, same as iOS. iOS always overlays |
 | `--no-shader-warmup` | Disable shader warmup (on by default): after the first frame, during idle time, draws common draw-call combinations once on the engine's GrDirectContext so GL programs compile ahead of time, avoiding a frame-blocking compile the first time a list/card page appears (on iOS without JIT, a single program compile can take hundreds of ms). Doesn't delay cold start; pauses during animation/scrolling/touch; light items are batched in slices of at most 8ms, heavy items like shadows/blur are split as finely as possible, require 1s of continuous idle time, one per slice |
 | `--shader-warmup-light` | Shader warmup only draws light items (text/solid color/images/circles/strokes/paths etc.), skipping heavy ones (shadows/`BoxShadow`/`BackdropFilter`/color matrices etc. — a single program compile can take over a hundred ms on real devices). Off by default; has no effect with `--no-shader-warmup` |
@@ -143,6 +144,7 @@ private_infos: [chooseLocation, choosePoi]   # merged and de-duplicated with --p
 semantics_mirror: false
 perf_hud: false
 # input_timing: false          # [mp-t] input-timing diagnostics (same as --input-timing)
+navigation_bar_text_style: black  # Status bar text/icons: black (default) / white
 # android_input: offscreen     # Android native input box: offscreen (default) / overlay, same as --android-input
 shader_warmup: true            # Warm up shaders during idle time after the first frame (same as --no-shader-warmup to disable)
 # shader_warmup_light: true     # Warmup only draws light items, skipping heavy ones (same as --shader-warmup-light)

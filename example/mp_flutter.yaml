@@ -4,6 +4,9 @@
 appid: touristappid
 output: build/weapp
 
+# 浅色页面使用黑色状态栏文字和图标;深色页面可改为 white。
+navigation_bar_text_style: black
+
 # 微信 tab 的“获取位置”演示用到 wx.getLocation:需要在 app.json 里声明
 # requiredPrivateInfos 与定位权限说明,否则真机会直接拒绝调用
 # (开发者工具不受此限制,但保持默认关闭时的行为一致仍应显式声明)。

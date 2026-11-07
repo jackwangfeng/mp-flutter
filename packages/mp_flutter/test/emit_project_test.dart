@@ -303,4 +303,20 @@ void main() {
       }, quotaBytes: kPreloadQuotaBytes - 8 * 1024), ['pkg-dart-0', 'pkg-assets-boot']);
     });
   });
+  test('状态栏颜色写入 app.json,默认黑色,支持白色并拒绝无效值', () {
+    ProjectFiles emit([String? style]) => emitProject(
+      appId: 'touristappid', subPackageRoots: const [],
+      entryPagePath: 'pages/flutter/flutter',
+      navigationBarTextStyle: style ?? 'black',
+    );
+    final defaultApp = jsonDecode(files.textFiles['app.json']!) as Map;
+    expect(defaultApp['window']['navigationBarTextStyle'], 'black');
+    for (final style in ['black', 'white']) {
+      final app = jsonDecode(emit(style).textFiles['app.json']!) as Map;
+      expect(app['window']['navigationBarTextStyle'], style);
+      expect(app['window']['navigationStyle'], 'custom');
+    }
+    expect(() => emit('red'), throwsArgumentError);
+  });
+
 }

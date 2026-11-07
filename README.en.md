@@ -24,7 +24,7 @@ mp-flutter compiles an existing Flutter project into a WeChat Mini Program. The 
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.3
+  flutter_miniprogram: ^0.3.4
 ```
 
 For an unreleased commit or a private fork, use a git dependency instead:
@@ -35,7 +35,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.3.3
+      ref: v0.3.4
 ```
 
 **2. Compile** — from the project root (running `dart run flutter_miniprogram doctor` first to self-check your toolchain is recommended):
@@ -78,6 +78,15 @@ Full reference: [`packages/mp_flutter/README.md`](packages/mp_flutter/README.md)
 | `--dart-define`, `--dart-define-from-file` | `dart_define` | Forwarded to `flutter build web` |
 
 Precedence is **CLI flag > `mp_flutter.yaml` > default**.
+
+Configure status bar text and icon color in the host project's `mp_flutter.yaml`:
+
+```yaml
+navigation_bar_text_style: black  # Default for light pages; use white for dark pages.
+```
+
+Override it with `dart run flutter_miniprogram --navigation-bar-text-style white`.
+Rebuild to update `window.navigationBarTextStyle` in the generated `app.json`.
 
 ## Support Matrix
 
