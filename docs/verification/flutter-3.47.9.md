@@ -36,6 +36,13 @@ engine `89c39edfdfae2949f6806e4a315c0c08522238b7`，Dart 3.13.7。
 安装锁定依赖后逐项补跑通过。首次消费者冒烟曾在 e2e-driver 子进程启动时失败；
 单独复测及随后完整检查均通过，未通过跳过或修改断言掩盖该次失败。
 
+发布后另在全新工程中通过正常 `flutter pub get` 安装 pub.dev 的 0.3.6，
+确认依赖来源为 hosted/pub.dev/flutter_miniprogram-0.3.6，使用真实 3.47.9
+再次构建通过，没有使用源码 path 依赖替代正式分发包。这份产物的开发者工具
+像素、垫片、随机数与中文排版验收也通过。
+
+最终代码的[三版本 CI](https://github.com/jackwangfeng/mp-flutter/actions/runs/42367283460)亦全部通过。
+
 ## 复跑
 
 先用目标 SDK 在验收工程执行 `flutter pub get`，在 tools/e2e 中执行 `npm ci`，
