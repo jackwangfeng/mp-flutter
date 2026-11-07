@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+const testOrigin = String.fromEnvironment(
+  'MPF_DOUYIN_TEST_ORIGIN',
+  defaultValue: 'https://postman-echo.com',
+);
+
 void main() => runApp(const MaterialApp(home: Probe()));
 
 class Probe extends StatefulWidget {
@@ -28,9 +33,7 @@ class _ProbeState extends State<Probe> {
       debugPrint('STATE storage=$previous->${previous + 1}');
       final response = await http
           .get(
-            Uri.parse(
-              'https://httpbin.org/get?message=%E4%BD%A0%E5%A5%BD%F0%9F%98%80',
-            ),
+            Uri.parse('$testOrigin/get?message=%E4%BD%A0%E5%A5%BD%F0%9F%98%80'),
           )
           .timeout(const Duration(seconds: 20));
       final message = (jsonDecode(response.body) as Map)['args']['message'];
@@ -38,6 +41,14 @@ class _ProbeState extends State<Probe> {
         throw StateError('unexpected network response');
       }
       debugPrint('STATE network=${response.statusCode}/$message');
+      final posted = await http
+          .post(Uri.parse('$testOrigin/post'), body: '你好😀')
+          .timeout(const Duration(seconds: 20));
+      if (posted.statusCode != 200 ||
+          (jsonDecode(posted.body) as Map)['data'] != '你好😀') {
+        throw StateError('unexpected POST response');
+      }
+      debugPrint('STATE post=200/你好😀');
       if (mounted)
         setState(
           () => status = '网络 ${response.statusCode} · 启动 ${previous + 1} 次',
@@ -62,7 +73,7 @@ class _ProbeState extends State<Probe> {
                 const Text('抖音小程序 · Flutter', style: TextStyle(fontSize: 24)),
                 Image.asset('assets/logo.png', width: 64, height: 64),
                 Image.network(
-                  'https://httpbin.org/image/png',
+                  '${const String.fromEnvironment('MPF_DOUYIN_IMAGE_ORIGIN', defaultValue: 'https://httpbin.org')}/image/png',
                   width: 48,
                   height: 48,
                   frameBuilder: (context, child, frame, sync) {

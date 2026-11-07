@@ -81,12 +81,16 @@ test('Douyin request maps only binary dataType and preserves request task and re
     assert.equal(this, c.wx);
     assert.equal(options.dataType, 'string');
     assert.equal(options.responseType, 'arraybuffer');
+    assert.equal(Object.keys(options.header).some(k => k.toLowerCase() === 'content-length'), false);
+    assert.equal(options.header['X-Count'], '12');
     return task;
   };
-  const options = {url:'https://example.com', responseType:'arraybuffer', dataType:'arraybuffer'};
+  const options = {url:'https://example.com', responseType:'arraybuffer', dataType:'arraybuffer', header:{'Content-Length':0,'X-Count':12}};
   const host = c.requireModule(path.join(RT, 'host.js')).getHost('douyin');
   assert.equal(host.api.request(options), task);
   assert.equal(options.dataType, 'arraybuffer');
+  assert.equal(options.header['Content-Length'], 0);
+  assert.equal(options.header['X-Count'], 12);
 });
 for (const synchronous of [false, true]) {
   test('Douyin WASM failure rejects boot loader even if initializer stays pending: sync=' + synchronous, {timeout:1000}, async () => {

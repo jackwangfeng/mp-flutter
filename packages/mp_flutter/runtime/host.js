@@ -33,6 +33,14 @@ function getHost(target) {
             // tt.request 只允许 json/string;二进制由 responseType 决定。
             const request = Object.assign({}, options);
             if (request.dataType === 'arraybuffer') request.dataType = 'string';
+            // Dart HTTP 客户端可能传数值头;tt 要求字符串,长度交给宿主计算。
+            if (request.header) {
+              const headers = {};
+              Object.keys(request.header).forEach(function (name) {
+                if (name.toLowerCase() !== 'content-length') headers[name] = String(request.header[name]);
+              });
+              request.header = headers;
+            }
             return value.call(api, request);
           } : value.bind(api) });
       }
