@@ -54,9 +54,10 @@ void main() {
   test('已验证版本无警告,其他版本警告后继续', () {
     final warnings = <String>[];
     VersionMatrix.check(const FlutterVersion('3.47.4'), warn: warnings.add);
+    VersionMatrix.check(const FlutterVersion('3.47.9'), warn: warnings.add);
     expect(warnings, isEmpty);
     for (final version in [
-      '3.47.9',
+      '3.47.10',
       '3.47.3',
       '3.47.5',
       '3.47.4-pre.1',

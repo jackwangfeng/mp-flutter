@@ -52,6 +52,7 @@ class VersionMatrix {
   static const supported = <String>[
     '3.41.9',
     '3.47.4',
+    '3.47.9',
     '3.41.10-ohos-0.0.2-beta',
   ];
 
