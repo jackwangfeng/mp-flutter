@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.5 — 2026-11-07
+
+- Allow unverified Flutter versions to build with a warning instead of enforcing an exact version allowlist. Keep transform matching and artifact checks.
+- The support matrix records verified versions; Flutter 3.47.9 has a user success report but has not completed the project regression suite.
+
 ## 0.3.4 — 2026-11-07
 
 - Add `navigation_bar_text_style` / `--navigation-bar-text-style` (`black` or `white`, default `black`) to configure status bar text and icons in generated app.json.

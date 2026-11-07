@@ -11,11 +11,7 @@ class KnownDivergence {
   });
 }
 
-/// Flutter 版本不在支持矩阵内。
-///
-/// 垫片与构建期变换都打在 engine 产物的**内部形状**上(握手入口、
-/// `window.flutterCanvasKit`、canvaskit.js 的补丁点)。这些不是公开 API,
-/// 换版本随时会变。所以宁可显式拒绝,也不静默尝试。
+/// 显式严格校验时,Flutter 版本不在已验证矩阵内。
 class UnsupportedFlutterVersion implements Exception {
   final String found;
   final List<String> supported;
@@ -52,7 +48,7 @@ class FlutterVersion {
 }
 
 class VersionMatrix {
-  /// 支持构建的版本;各版本的运行验收状态见 docs/support-matrix.md。
+  /// 已验证的版本,不作为默认构建白名单;验收状态见 docs/support-matrix.md。
   static const supported = <String>[
     '3.41.9',
     '3.47.4',
@@ -72,10 +68,19 @@ class VersionMatrix {
     ],
   };
 
-  static void check(FlutterVersion v) {
-    if (!supported.contains(v.version)) {
-      throw UnsupportedFlutterVersion(v.version, supported);
-    }
+  /// 默认允许其他版本尝试构建;调用方可收集警告,或显式启用严格校验。
+  static void check(
+    FlutterVersion v, {
+    bool strict = false,
+    void Function(String message)? warn,
+  }) {
+    if (supported.contains(v.version)) return;
+    if (strict) throw UnsupportedFlutterVersion(v.version, supported);
+    (warn ?? print)(
+      '警告:Flutter ${v.version} 尚未经过本项目回归验证,继续尝试构建。'
+      '已验证版本:${supported.join(', ')}。'
+      '构建成功不代表运行验收通过,请在开发者工具及真机验证。',
+    );
   }
 
   /// 查询指定版本的已知分叉差异。

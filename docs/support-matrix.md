@@ -11,6 +11,10 @@
 
 ## 工具链版本
 
+自 flutter_miniprogram 0.3.5 起，版本矩阵只记录验证范围，默认不再作为构建白名单。
+其他 Flutter 版本会显示警告并继续尝试构建，补丁匹配、工具链和包体积检查仍照常执行。
+Flutter 3.47.9 已有用户反馈可运行，但尚未完成本项目完整验收。
+
 **运行 `dart run flutter_miniprogram`(构建 CLI 本身)只支持 macOS/Linux,Windows 未
 支持**——回归套件、CI(`ubuntu-latest`)与全部本地开发都在 macOS/Linux 上跑,
 `brotli`/`unset FLUTTER_ROOT` 等做法也是 POSIX shell 假设;Windows 上能否跑通

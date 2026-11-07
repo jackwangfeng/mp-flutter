@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.5 — 2026-11-07
+
+- 取消默认构建的 Flutter 精确版本白名单。未验证版本仅显示警告并继续构建，补丁匹配和产物检查仍照常执行。
+- 支持矩阵只记录已验证范围，不代表其他版本不可尝试。Flutter 3.47.9 已有用户运行成功反馈，尚未完成项目完整验收。
+
 ## 0.3.4 — 2026-11-07
 
 - 新增 `navigation_bar_text_style` / `--navigation-bar-text-style` 状态栏文字和图标颜色配置,支持 black / white,默认 black;写入 app.json 的 window.navigationBarTextStyle。

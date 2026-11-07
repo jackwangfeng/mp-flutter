@@ -138,9 +138,9 @@ Future<SizeReport> runPipeline({
   final splashBg = normalizeSplashColor(splashColor ?? kDefaultSplashColor);
   final bin = resolveFlutterBin(flutterBin, projectPath: projectPath);
 
-  // 1. 版本校验 —— 不匹配直接失败,绝不静默尝试
+  // 1. 版本提示 —— 矩阵外版本继续构建,实际变换与产物检查仍执行
   final version = FlutterVersion.parse(await readFlutterVersion(bin));
-  VersionMatrix.check(version);
+  VersionMatrix.check(version, warn: stderr.writeln);
   stdout.writeln(
     'Flutter ${version.version}${version.isOhosFork ? ' (ohos fork)' : ''}',
   );

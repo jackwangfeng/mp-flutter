@@ -26,7 +26,7 @@
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.4
+  flutter_miniprogram: ^0.3.5
 ```
 
 也可以用 git 依赖引入本仓库(公开仓库,无需额外凭证;`ref` 建议固定到一个
@@ -39,7 +39,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.3.4
+      ref: v0.3.5
 ```
 
 **2. 编译**——工程根跑一条命令(先跑 `dart run flutter_miniprogram doctor`
@@ -200,7 +200,7 @@ dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter_wechat
-      ref: v0.3.4
+      ref: v0.3.5
 ```
 
 ```dart
