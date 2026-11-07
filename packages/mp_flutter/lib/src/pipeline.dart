@@ -10,7 +10,8 @@ import 'config.dart'
         kPreloadModes,
         kCjkBoldTimings,
         kBootAssetsModes,
-        kNavigationBarTextStyles;
+        kNavigationBarTextStyles,
+        kTargetPlatforms;
 import 'emit_project.dart';
 import 'entrypoint.dart';
 
@@ -63,6 +64,7 @@ Future<SizeReport> runPipeline({
   required String projectPath,
   required String outputPath,
   required String appId,
+  String targetPlatform = 'wechat',
   String navigationBarTextStyle = 'black',
   String? flutterBin,
   String? esbuildPath,
@@ -95,6 +97,16 @@ Future<SizeReport> runPipeline({
   String androidInput = 'offscreen',
   bool inputTiming = false,
 }) async {
+  if (!kTargetPlatforms.contains(targetPlatform)) {
+    throw ArgumentError.value(
+      targetPlatform,
+      'targetPlatform',
+      '只支持 wechat / douyin',
+    );
+  }
+  if (targetPlatform == 'douyin' && cjkFont != null) {
+    throw ArgumentError('抖音实验性构建暂不支持压缩合一字体,请配置 cjk_font: false');
+  }
   if (!kNavigationBarTextStyles.contains(navigationBarTextStyle)) {
     throw ArgumentError.value(
       navigationBarTextStyle,
@@ -252,7 +264,14 @@ Future<SizeReport> runPipeline({
     ckPatched,
     esbuildPath: esbuildBin,
   );
-  emitText('canvaskit.js', ckDowngraded, 'main');
+  emitText(
+    'canvaskit.js',
+    targetPlatform == 'douyin'
+        ? "var WebAssembly = require('./host.js').getHost('douyin').wasm;\n" +
+              ckDowngraded
+        : ckDowngraded,
+    'main',
+  );
 
   // 4. main.dart.js 分片后放进 pkg-dart-0..N;每片注入 preamble(垫片在主包
   //    根目录,分包可以同步 require 主包 JS)。
@@ -275,10 +294,7 @@ Future<SizeReport> runPipeline({
   // 这里只防组合不合法(与常规不同档会出豆腐块,见 cjk_font.dart)
   if (cjkFontBold != null) resolveCjkBoldLevel(cjkFont, cjkFontBold);
   final mainJsPatched = cjkFont != null
-      ? patchFontFallback(
-          mainJsRaw,
-          family: kCjkFontFamily,
-        )
+      ? patchFontFallback(mainJsRaw, family: kCjkFontFamily)
       : mainJsRaw;
   // 正则 Unicode 属性转义 \p{…} 改写成码点区间(安卓微信 JS 引擎不带 ICU,
   // 不支持;Flutter text_painter 插入文字时会构造,见 transform/unicode_property_escapes.dart)。
@@ -367,6 +383,7 @@ Future<SizeReport> runPipeline({
   // `.dart_tool` 下的临时产物,不在本包源码树下,固定上溯层数会跳到无关目录。
   final runtimeDir = Directory(p.join(await resolvePackageRoot(), 'runtime'));
   for (final name in [
+    'host.js',
     'bom-shim.js',
     'canvaskit-loader.js',
     'net.js',
@@ -602,6 +619,7 @@ Future<SizeReport> runPipeline({
   }
   final proj = emitProject(
     appId: appId,
+    targetPlatform: targetPlatform,
     navigationBarTextStyle: navigationBarTextStyle,
     subPackageRoots: subPackages,
     entryPagePath: _entryPage,
@@ -640,6 +658,7 @@ Future<SizeReport> runPipeline({
   emitText(
     '$_entryPage.js',
     buildHostPageJs(
+      targetPlatform: targetPlatform,
       verify: verify,
       forcePlatform: forcePlatform,
       semanticsMirror: semanticsMirror,
@@ -743,6 +762,7 @@ const kAndroidInputModes = ['offscreen', 'overlay'];
 /// [androidInput]:见 [kAndroidInputModes]。[inputTiming]:`--input-timing`
 /// 计时诊断(见 runtime/input-timing.js),关闭时不注入任何相关代码。
 String buildHostPageJs({
+  String targetPlatform = 'wechat',
   required bool verify,
   String? forcePlatform,
   bool semanticsMirror = false,
@@ -755,6 +775,14 @@ String buildHostPageJs({
   String androidInput = 'offscreen',
   bool inputTiming = false,
 }) {
+  if (!kTargetPlatforms.contains(targetPlatform)) {
+    throw ArgumentError.value(
+      targetPlatform,
+      'targetPlatform',
+      '只支持 wechat / douyin',
+    );
+  }
+  final douyin = targetPlatform == 'douyin';
   if (!kAndroidInputModes.contains(androidInput)) {
     throw ArgumentError.value(
       androidInput,
@@ -809,7 +837,7 @@ String buildHostPageJs({
       ',\n        earlyWasm: $earlyWasm'
       ',\n        cjkBoldTiming: ${jsonEncode(cjkFontBoldTiming == 'eager' ? 'eager' : 'after-first-frame')}';
   return '''
-Page({
+${douyin ? "const __mpHost = require('../../host.js').getHost('douyin');\nconst wx = __mpHost.api;\n" : ''}Page({
   data: { mpError: '', mpInput: { visible: false }, mpNative: {}, mpNativeList: [], mpSemantics: [],
     mpPerf: { visible: false, fps: 0, avg: 0 },
     mpSplash: { visible: true, progress: 0, error: '' } },
@@ -921,8 +949,8 @@ ${t ? "    if (this.mpT) { this.mpT.stop(); this.mpT = null; }\n" : ''}  },
     // 重入重启后带 mpRestarted=1 回来;若仍检测到重入就不再重启,避免无限重启循环
     const restarted = !!(options && options.mpRestarted);
     // 旧基础库(过低版本)没有 showShareMenu;不存在时忽略,不影响其余启动流程
-    try { if (wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage', 'shareTimeline'] }); } catch (e) { /* 旧基础库忽略 */ }
-    wx.createSelectorQuery().select('#flutter-canvas').node((res) => {
+    try { if (wx.showShareMenu) wx.showShareMenu({ menus: ${douyin ? "['share']" : "['shareAppMessage', 'shareTimeline']"} }); } catch (e) { /* 旧基础库忽略 */ }
+    ${douyin ? "__mpHost.selectCanvas('#flutter-canvas', (res) => {" : "wx.createSelectorQuery().select('#flutter-canvas').node((res) => {"}
       const canvas = res && res.node;
       if (!canvas) { this.fail('拿不到画布节点(selectorQuery 返回空)'); return; }
       let boot, manifest, acquireGlContext;
@@ -937,7 +965,7 @@ ${t ? "    if (this.mpT) { this.mpT.stop(); this.mpT = null; }\n" : ''}  },
       canvas.height = info.windowHeight * info.pixelRatio;
 ${perfHud ? _perfHudBootTimerSnippet : ''}
 ${verify ? _consoleStateBufferSnippet : ''}
-      boot({ canvas, wasmPath: '/$_wasmPackage/canvaskit.wasm.br', manifest,
+      boot({ ${douyin ? 'host: __mpHost, nativeImage: false, ' : ''}canvas, wasmPath: '/$_wasmPackage/canvaskit.wasm.br', manifest,
         cssWidth: info.windowWidth, cssHeight: info.windowHeight$platformArg$stageArg })
         .then((r) => {
           this.mpShim = r.shim;
@@ -976,14 +1004,7 @@ ${t ? _inputTimingInitSnippet : ''}            // 视图同步负责"推送值�
               }
             } catch (e) { /* 旧基础库忽略 */ }
           } catch (e) { this.fail('文本输入桥初始化失败: ' + ((e && e.message) || e)); }
-          try {
-            const { createNativeViews } = require('../../native-views.js');
-            this.mpNative = createNativeViews({
-              shim: r.shim, wx: r.shim.wx,
-              setData: (patch, cb) => this.setData(patch, cb),
-              raf: (cb) => r.shim.window.requestAnimationFrame(cb),
-            });
-          } catch (e) { this.fail('原生视图同步层初始化失败: ' + ((e && e.message) || e)); }
+${douyin ? '' : _nativeViewsInitSnippet}
 ${semanticsMirror ? _semanticsMirrorInitSnippet : ''}
 ${perfHud ? _perfHudInitSnippet : ''}
 ${verify ? _verifySnippet : ''}
@@ -1012,7 +1033,7 @@ ${verify ? _verifySnippet : ''}
           }
           this.fail('启动失败: ' + ((e && e.stack) || e));
         });
-    }).exec();
+    ${douyin ? '});' : '}).exec();'}
   },
 });
 ''';
@@ -1189,4 +1210,15 @@ const _verifySnippet = '''
               emit('MPNATIVE|' + JSON.stringify(this.data.mpNative || {}));
             } catch (e) { emit('MPNATIVE|__error__ ' + ((e && e.message) || e)); }
           }, 3000);
+''';
+
+const _nativeViewsInitSnippet = r'''
+          try {
+            const { createNativeViews } = require('../../native-views.js');
+            this.mpNative = createNativeViews({
+              shim: r.shim, wx: r.shim.wx,
+              setData: (patch, cb) => this.setData(patch, cb),
+              raf: (cb) => r.shim.window.requestAnimationFrame(cb),
+            });
+          } catch (e) { this.fail('原生视图同步层初始化失败: ' + ((e && e.message) || e)); }
 ''';

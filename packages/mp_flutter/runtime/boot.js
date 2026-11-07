@@ -40,6 +40,9 @@ const { createNet, makeFetch } = require('./net.js');
 let booted = false;
 
 function boot(opts) {
+  const host = opts.host || require('./host.js').getHost();
+  const wx = host.api;
+  if (!wx) return Promise.reject(new Error('小程序宿主 API 不存在'));
   if (booted) {
     const err = new Error(
       'Flutter 引擎在本次小程序生命周期内已启动过;承载页重入(reLaunch/重新打开)暂不支持');
@@ -156,7 +159,7 @@ function boot(opts) {
   // 真正的失败在下面 initializeEngine 之前被 await 出来,走同一条报错路径
   lateLoaded.catch(function () {});
   const startCanvasKit = function () {
-    return loadCanvasKit({ canvas: canvas, wasmPath: wasmPath, canvasKitInit: CanvasKitInit })
+    return loadCanvasKit({ canvas: canvas, wasmPath: wasmPath, canvasKitInit: CanvasKitInit, wasm: host.wasm, requireStencil: host.name !== 'douyin' })
       .then(function (CK) {
         // 微信没有细分"读取 wasm 字节/编译/实例化"三个子阶段的 API
         // (WXWebAssembly.instantiate 是一次性完成的黑盒调用,见
@@ -263,7 +266,7 @@ function boot(opts) {
       // opts.simulate 同样只由 --verify --force-platform 传入:在开发者工具(V8)
       // 里模拟真机 JS 引擎缺失的能力('ios' / 'android-noIntl',见 bom-shim.js)
       const shim = bom.install({
-        canvas: canvas, width: width, height: height, dpr: dpr, platform: platform, CK: CK,
+        canvas: canvas, width: width, height: height, dpr: dpr, platform: platform, CK: CK, wx: wx,
         simulate: opts.simulate,
         // 静态 JPEG/PNG 走微信原生解码(image.js);opts.nativeImage === false 关闭,
         // 传对象可指定 { mode: 'file' | 'dataurl' }
@@ -321,7 +324,7 @@ function boot(opts) {
       // 同样必须在 manifest.loadDart() 之前装好——引擎/业务代码可能在模块顶层
       // 就读取该全局。承载页经 r.shim.wechat 访问,供 onShareAppMessage 等钩子使用。
       const { createWechatBridge } = require('./wechat.js');
-      const wechat = createWechatBridge({ wx: wx });
+      const wechat = host.name === 'wechat' ? createWechatBridge({ wx: wx }) : null;
       shim.window.__mpWechat = wechat;
       shim.self.__mpWechat = wechat;
       shim.wechat = wechat;
@@ -361,9 +364,9 @@ function boot(opts) {
       // 文档)。registry_web.dart 的 `_awaitBridge` 作为兜底继续保留,不
       // 依赖这里一定先跑到。
       const { createNativeFacade } = require('./native-views.js');
-      const nativeFacade = createNativeFacade();
-      shim.window.__mpNative = nativeFacade.bridge;
-      shim.self.__mpNative = nativeFacade.bridge;
+      const nativeFacade = host.name === 'wechat' ? createNativeFacade() : null;
+      shim.window.__mpNative = nativeFacade && nativeFacade.bridge;
+      shim.self.__mpNative = nativeFacade && nativeFacade.bridge;
       shim.nativeFacade = nativeFacade;
 
       // 原生视图同步层(Phase 5 Task 2,承载页 boot 成功后创建)经 r.shim.wx
@@ -578,7 +581,8 @@ function matchAsset(assets, url) {
  * 外来 buffer,必须拷进本 realm 新建的数组。
  */
 function decodeParts(parts) {
-  const chunks = parts.map(function (b64) { return new Uint8Array(wx.base64ToArrayBuffer(b64)); });
+  const api = require('./host.js').getHost().api;
+  const chunks = parts.map(function (b64) { return new Uint8Array(api.base64ToArrayBuffer(b64)); });
   const total = chunks.reduce(function (n, c) { return n + c.length; }, 0);
   const out = new Uint8Array(total);
   let off = 0;

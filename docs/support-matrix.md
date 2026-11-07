@@ -11,8 +11,8 @@
 
 ## 工具链版本
 
-自 flutter_miniprogram 0.3.5 起，版本矩阵只记录验证范围，默认不再作为构建白名单。
-其他 Flutter 版本会显示警告并继续尝试构建，补丁匹配、工具链和包体积检查仍照常执行。
+自 flutter_miniprogram 0.3.5 起，版本矩阵只记录验证范围，默认不再作为构建白名单。其他 Flutter
+版本会显示警告并继续尝试构建，实际补丁匹配、工具链和包体积检查仍照常执行。
 Flutter 3.47.9 的字体补丁失配在 0.3.6 修复；构建和模拟器验收记录见下方。
 
 **运行 `dart run flutter_miniprogram`(构建 CLI 本身)只支持 macOS/Linux,Windows 未
@@ -52,6 +52,12 @@ fork):没有显式传 `--flutter`/`mp_flutter.yaml` 的 `flutter` 时,flutter_mi
 SDK(该工程 `flutter pub get` 时用的那一套);显式指定的 SDK 与这个推断结果
 不一致时会直接报错(退出码 64),而不是二选一悄悄跑出一个引擎/源码版本错配
 的产物,见 [`docs/troubleshooting.md`](troubleshooting.md) 退出码 64 一节。
+
+## 抖音实验性目标（flutter_miniprogram ≥0.4.0）
+
+Flutter 3.47.9 下，中文、资源图片、三角形裁剪和点击计数已通过抖音开发者工具验收，
+用户反馈同一预览工程在真机运行正常。设备型号、系统和抖音版本未记录；网络、
+存储、输入及原生组件等能力不包含在本次真机确认中。详见 [抖音说明](douyin.md)。
 
 ## 平台桥状态
 

@@ -16,14 +16,14 @@
 ## Flutter 版本支持
 
 **0.3.3** 新增 Flutter **3.47.4** 支持,继续兼容 **3.41.9** 和
-**3.41.10-ohos-0.0.2-beta**。其他 SDK 版本尚未验证,构建时会明确拒绝。
+**3.41.10-ohos-0.0.2-beta**。3.47.9 亦已验证；其他 SDK 版本会警告后继续尝试构建。
 运行验收结果与真机限制见[支持矩阵](https://github.com/jackwangfeng/mp-flutter/blob/main/docs/support-matrix.md)。
 
 ## 安装
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.6
+  flutter_miniprogram: ^0.4.0
 ```
 
 也可以用 git 依赖引入本仓库(公开仓库,无需额外凭证;`ref` 建议固定到一个
@@ -247,3 +247,13 @@ build web` 失败、5 构建期变换失配、6 外部工具缺失、7 字体下
 ## 许可证
 
 Apache License 2.0,见仓库根 [LICENSE](../../LICENSE)。
+
+## 抖音小程序（0.4.0 实验性支持）
+
+```sh
+dart run flutter_miniprogram --platform douyin --appid <你的抖音AppID>
+```
+
+默认输出到 `build/douyin`，也支持 YAML `platform: douyin`。
+默认使用随包回退字体，合一压缩中文字体及微信/原生组件桥暂不可用。
+验证范围见[抖音说明](https://github.com/jackwangfeng/mp-flutter/blob/main/docs/douyin.md)。

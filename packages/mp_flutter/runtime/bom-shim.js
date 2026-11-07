@@ -785,6 +785,7 @@ const maybeGlobal = {
 };
 
 function install(opts) {
+  const wx = opts.wx || require('./host.js').getHost().api;
   const canvas = opts.canvas, width = opts.width, height = opts.height, dpr = opts.dpr || 1;
   const ctx = { canvas, width, height, images: null };
   const g = globalThis;

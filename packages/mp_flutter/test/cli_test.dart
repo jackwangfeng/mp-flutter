@@ -95,6 +95,7 @@ void main() {
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -157,6 +158,7 @@ void main() {
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -210,6 +212,7 @@ void main() {
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -267,6 +270,7 @@ void main() {
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -323,6 +327,7 @@ void main() {
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -384,6 +389,7 @@ void main() {
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -474,6 +480,7 @@ void main() {
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -593,6 +600,7 @@ void main() {
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -662,6 +670,7 @@ require_location: true
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -723,6 +732,7 @@ require_location: true
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -773,6 +783,7 @@ require_location: true
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -828,6 +839,7 @@ some_unknown_future_key: 1
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -882,6 +894,7 @@ esbuild: tools/esbuild/bin/esbuild
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -934,6 +947,7 @@ esbuild: tools/esbuild/bin/esbuild
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -986,6 +1000,7 @@ esbuild: tools/esbuild/bin/esbuild
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1047,6 +1062,7 @@ private_infos: [chooseLocation, getFuzzyLocation]
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1102,6 +1118,7 @@ private_infos: [chooseLocation]
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1154,6 +1171,7 @@ private_infos: [chooseLocation]
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1207,6 +1225,7 @@ private_infos: [notARealApi]
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1258,6 +1277,7 @@ private_infos: [notARealApi]
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1312,6 +1332,7 @@ private_infos: [notARealApi]
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1371,6 +1392,7 @@ private_infos: [notARealApi]
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1419,6 +1441,7 @@ private_infos: [notARealApi]
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1468,6 +1491,7 @@ private_infos: [notARealApi]
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1517,6 +1541,7 @@ private_infos: [notARealApi]
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1584,6 +1609,7 @@ private_infos: [notARealApi]
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,
@@ -1840,6 +1866,7 @@ esbuild: tools/esbuild/bin/esbuild
     late Map<String, Object?> seen;
     String? cjkSeen;
     String? boldSeen;
+    String? platformSeen, outputSeen, appIdSeen;
     setUp(() {
       projectDir = Directory.systemTemp.createTempSync('mpf_cli_size_');
       cjkSeen = null;
@@ -1880,6 +1907,7 @@ esbuild: tools/esbuild/bin/esbuild
       bool lazyCodeLoading = true,
       String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
       bool inputTiming = false,
       List<String> dartDefines = const [],
       String? dartDefineFromFile,
@@ -1890,6 +1918,9 @@ esbuild: tools/esbuild/bin/esbuild
         'licenses': licenses, 'fontBaseUrl': fontBaseUrl,
         'splashTitle': splashTitle, 'splashColor': splashColor,
       };
+      platformSeen = targetPlatform;
+      outputSeen = outputPath;
+      appIdSeen = appId;
       cjkSeen = cjkFont;
       boldSeen = cjkFontBold;
       return SizeReport(const {}, const []);
@@ -1903,6 +1934,30 @@ esbuild: tools/esbuild/bin/esbuild
       expect(out.toString(), contains('「详情 → 本地设置」'));
       expect(out.toString(), contains('「将 JS 编译成 ES5」和「增强编译」'));
       expect(seen, {'licenses': true, 'fontBaseUrl': null, 'splashTitle': null, 'splashColor': null});
+    });
+
+    test('抖音目标默认值、YAML 与 CLI 优先级及不支持的字体提前报错', () async {
+      Future<int> run(List<String> extra) => runCli(
+        ['--project', projectDir.path, ...extra], pipelineRunner: fake,
+        stdoutSink: StringBuffer(), stderrSink: StringBuffer(),
+      );
+      expect(await run(['--platform', 'douyin']), 0);
+      expect(platformSeen, 'douyin');
+      expect(outputSeen, p.join(projectDir.path, 'build/douyin'));
+      expect(appIdSeen, 'testAppId');
+      expect(cjkSeen, isNull);
+      expect(boldSeen, isNull);
+      yaml('platform: douyin\nappid: tt-from-config\n');
+      expect(await run([]), 0);
+      expect(platformSeen, 'douyin');
+      expect(appIdSeen, 'tt-from-config');
+      expect(await run(['--platform', 'wechat']), 0);
+      expect(platformSeen, 'wechat');
+      expect(cjkSeen, 'full');
+      expect(outputSeen, p.join(projectDir.path, 'build/weapp'));
+      platformSeen = null;
+      expect(await run(['--cjk-font', 'full']), 64);
+      expect(platformSeen, isNull);
     });
 
     test('常用汉字合一字体默认 full;--cjk-font=level1 / --no-cjk-font / cjk_font 配置,命令行优先', () async {
@@ -1999,7 +2054,8 @@ esbuild: tools/esbuild/bin/esbuild
           bool earlyWasm = true, String bootAssets = 'auto', bool initialRenderingCache = true,
           bool lazyCodeLoading = true, List<String> dartDefines = const [], String? dartDefineFromFile,
           bool safeArea = true, String? target, String androidInput = 'offscreen',
-          String navigationBarTextStyle = 'black', bool inputTiming = false,
+          String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat', bool inputTiming = false,
         }) async {
           seen = {'preload': preload, 'bold': cjkFontBoldTiming, 'early': earlyWasm, 'boot': bootAssets,
             'irc': initialRenderingCache, 'lazy': lazyCodeLoading, 'ai': androidInput, 'it': inputTiming};
@@ -2068,6 +2124,7 @@ esbuild: tools/esbuild/bin/esbuild
           bool lazyCodeLoading = true,
           String androidInput = 'offscreen',
           String navigationBarTextStyle = 'black',
+          String targetPlatform = 'wechat',
           bool inputTiming = false,
           List<String> dartDefines = const [],
           String? dartDefineFromFile,

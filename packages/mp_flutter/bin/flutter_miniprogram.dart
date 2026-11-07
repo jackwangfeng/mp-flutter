@@ -19,7 +19,7 @@ import 'package:flutter_miniprogram/src/package_root.dart';
 /// 手动与 pubspec.yaml 的 `version:` 保持一致——Dart 没有开销对等的运行时
 /// 方式读取自身包的 pubspec 只为取一个版本号(`resolvePackageRoot()` 倒是能
 /// 定位到包根,但读文件+解析 YAML 只为一个字符串不值得),这两处都极少改动。
-const kPackageVersion = '0.3.6';
+const kPackageVersion = '0.4.0';
 
 /// [runPipeline] 的签名,供 `runCli` 测试注入——单测不应该真的跑一遍
 /// `flutter build web`。
@@ -28,6 +28,7 @@ typedef PipelineRunner =
       required String projectPath,
       required String outputPath,
       required String appId,
+      String targetPlatform,
       String navigationBarTextStyle,
       String? flutterBin,
       String? esbuildPath,
@@ -90,11 +91,11 @@ ArgParser buildArgParser() {
     ..addOption(
       'output',
       abbr: 'o',
-      help: '产物输出路径(默认 build/weapp;可被 mp_flutter.yaml 的 output 覆盖)',
+      help: '产物输出路径(默认微信 build/weapp、抖音 build/douyin;可被 mp_flutter.yaml 的 output 覆盖)',
     )
     ..addOption(
       'appid',
-      help: '小程序 appid(默认 touristappid;可被 mp_flutter.yaml 的 appid 覆盖)',
+      help: '小程序 appid(默认微信 touristappid、抖音 testAppId;可被 mp_flutter.yaml 的 appid 覆盖)',
     )
     ..addOption(
       'flutter',
@@ -152,6 +153,11 @@ ArgParser buildArgParser() {
           '并估算按键到 JS 的延迟。默认关闭:关闭时不打包、不注入任何相关代码。'
           '可被 mp_flutter.yaml 的 input_timing 覆盖。',
       defaultsTo: false,
+    )
+    ..addOption(
+      'platform',
+      allowed: kTargetPlatforms,
+      help: '构建目标:wechat(默认)/douyin(实验性)。可在 mp_flutter.yaml 设置 platform。',
     )
     ..addOption(
       'navigation-bar-text-style',
@@ -354,7 +360,7 @@ Future<int> runCli(
   }
 
   if (args['help'] as bool) {
-    out.writeln('flutter_miniprogram — 把 Flutter 工程编译成微信小程序\n');
+    out.writeln('flutter_miniprogram — 把 Flutter 工程编译成微信/抖音小程序\n');
     out.writeln(parser.usage);
     out.writeln(
       '\n子命令:'
@@ -481,8 +487,17 @@ Future<int> runCli(
     return anchorToProjectRoot(fromConfig, projectPath);
   }
 
-  final outputPath = pickPathStr('output', config.output, 'build/weapp');
-  final appId = pickStr('appid', config.appId, 'touristappid');
+  final targetPlatform = pickStr('platform', config.targetPlatform, 'wechat');
+  final outputPath = pickPathStr(
+    'output',
+    config.output,
+    targetPlatform == 'douyin' ? 'build/douyin' : 'build/weapp',
+  );
+  final appId = pickStr(
+    'appid',
+    config.appId,
+    targetPlatform == 'douyin' ? 'testAppId' : 'touristappid',
+  );
   final flutterBin = pickPathOpt('flutter', config.flutter);
   final esbuildPath = pickPathOpt('esbuild', config.esbuild);
   final requireLocation = pickBool(
@@ -522,8 +537,13 @@ Future<int> runCli(
       ? 'false'
       : (args.wasParsed('cjk-font')
             ? args['cjk-font'] as String
-            : (config.cjkFont ?? 'full'));
+            : (config.cjkFont ??
+                  (targetPlatform == 'douyin' ? 'false' : 'full')));
   final String? cjkFont = cjkLevel == 'false' ? null : cjkLevel;
+  if (targetPlatform == 'douyin' && cjkFont != null) {
+    err.writeln('❌ 抖音目标暂不支持压缩合一字体,请配置 cjk_font: false');
+    return 64;
+  }
   final String? cjkFontBold;
   try {
     cjkFontBold = resolveCjkBoldLevel(
@@ -634,6 +654,7 @@ Future<int> runCli(
       projectPath: projectPath,
       outputPath: outputPath,
       appId: appId,
+      targetPlatform: targetPlatform,
       navigationBarTextStyle: navigationBarTextStyle,
       flutterBin: flutterBin,
       esbuildPath: esbuildPath,
@@ -673,7 +694,11 @@ Future<int> runCli(
       return 2;
     }
     out.writeln('\n✓ 完成:$outputPath');
-    out.writeln('  用微信开发者工具打开该目录即可运行。');
+    out.writeln(
+      targetPlatform == 'douyin'
+          ? '  实验性抖音产物:用抖音开发者工具打开该目录验证。'
+          : '  用微信开发者工具打开该目录即可运行。',
+    );
     // 开发者工具界面打开工程时,会用它按项目记住的「本地设置」覆盖
     // project.config.json 里的 es6/enhance(默认都勾选),上传时 dart 分片被
     // 再编译、膨胀超出单分包 2048KB。命令行上传不受影响。

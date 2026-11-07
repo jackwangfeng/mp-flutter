@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 — 2026-11-07
+
+- Add an experimental Douyin Mini Program target (`--platform douyin` / YAML `platform: douyin`) with TT templates, async common packages, TTWebAssembly and tt host adaptation. WeChat remains the default.
+- Use the standard Douyin navigation bar and bundled fallback fonts. WeChat/native platform bridges are unavailable on this target.
+- Reject failed WASM initialization instead of leaving the boot promise pending. Add Douyin build smoke checks across the three CI Flutter versions.
+
 ## 0.3.6 — 2026-11-07
 
 - Fix Flutter 3.47.9 font patch failure after the version allowlist was relaxed in 0.3.5. Detect generated JS structure instead of selecting the font patch by an exact Flutter version.

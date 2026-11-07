@@ -17,16 +17,16 @@ codes.
 
 ## Supported Flutter versions
 
-Version **0.3.3** adds Flutter **3.47.4** support and keeps **3.41.9** and
-**3.41.10-ohos-0.0.2-beta** support. Other SDK versions are rejected until
-validated. See the [support matrix](https://github.com/jackwangfeng/mp-flutter/blob/main/docs/support-matrix.md)
+Verified Flutter SDKs include **3.41.9**, **3.47.4**, **3.47.9** and the
+**3.41.10-ohos-0.0.2-beta** fork. Other versions may build with a warning;
+they are not rejected solely by version number. See the [support matrix](https://github.com/jackwangfeng/mp-flutter/blob/main/docs/support-matrix.md)
 for runtime checks and device limitations.
 
 ## Install
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.6
+  flutter_miniprogram: ^0.4.0
 ```
 
 A git dependency to this repository also works (public repo, no extra
@@ -282,3 +282,14 @@ See
 
 Apache License 2.0, see the repository root
 [LICENSE](../../LICENSE).
+
+## Experimental Douyin target (0.4.0)
+
+```sh
+dart run flutter_miniprogram --platform douyin --appid <your-douyin-appid>
+```
+
+Output defaults to `build/douyin`. YAML supports `platform: douyin`.
+Bundled fallback fonts are used by default; compressed unified CJK fonts and
+the WeChat/native platform bridges are unavailable on this target.
+See [Douyin scope and validation](https://github.com/jackwangfeng/mp-flutter/blob/main/docs/douyin.md).

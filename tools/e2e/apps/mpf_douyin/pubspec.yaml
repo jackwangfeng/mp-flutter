@@ -1,0 +1,13 @@
+name: mpf_douyin
+publish_to: none
+environment:
+  sdk: ^3.11.0
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.6.0
+  shared_preferences: ^2.5.5
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/logo.png

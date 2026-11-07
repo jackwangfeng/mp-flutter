@@ -97,6 +97,7 @@ bool _dependsOnFlutter(String pubspecYaml) {
 /// `mp_flutter.yaml`(可选,位于工程根)里认识的键。
 const kKnownConfigKeys = <String>{
   'appid',
+  'platform',
   'navigation_bar_text_style',
   'output',
   'flutter',
@@ -125,6 +126,9 @@ const kKnownConfigKeys = <String>{
   'android_input',
   'input_timing',
 };
+
+/// 构建目标宿主。douyin 为实验性支持,运行验收状态见 docs/douyin.md。
+const kTargetPlatforms = ['wechat', 'douyin'];
 
 /// 状态栏文字和图标颜色,映射 app.json window.navigationBarTextStyle。
 const kNavigationBarTextStyles = ['black', 'white'];
@@ -190,6 +194,7 @@ const kLocationScopePrivateInfos = <String>{
 /// 默认值"的优先级合并)。
 class MpFlutterConfig {
   final String? appId;
+  final String? targetPlatform;
   final String? navigationBarTextStyle;
   final String? output;
   final String? flutter;
@@ -235,6 +240,7 @@ class MpFlutterConfig {
 
   const MpFlutterConfig({
     this.appId,
+    this.targetPlatform,
     this.navigationBarTextStyle,
     this.output,
     this.flutter,
@@ -425,6 +431,7 @@ MpFlutterConfig loadConfig(
 
   return MpFlutterConfig(
     appId: asString('appid'),
+    targetPlatform: asEnum('platform', kTargetPlatforms),
     navigationBarTextStyle: asEnum(
       'navigation_bar_text_style',
       kNavigationBarTextStyles,

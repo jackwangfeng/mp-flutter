@@ -24,7 +24,7 @@ mp-flutter compiles an existing Flutter project into a WeChat Mini Program. The 
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.6
+  flutter_miniprogram: ^0.4.0
 ```
 
 For an unreleased commit or a private fork, use a git dependency instead:
@@ -35,7 +35,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.3.6
+      ref: v0.4.0
 ```
 
 **2. Compile** — from the project root (running `dart run flutter_miniprogram doctor` first to self-check your toolchain is recommended):
@@ -184,3 +184,5 @@ It depends on your project and chosen build options; typical total package sizes
 - [`packages/mp_flutter_native/README.md`](packages/mp_flutter_native/README.md) — full native components API
 - [`example/`](example/) — example project (dogfooding target, covers every capability)
 - [`tools/e2e/README.md`](tools/e2e/README.md) — end-to-end regression suite (run locally)
+
+Version 0.4.0 adds an experimental Douyin target; Basic IDE rendering/interaction checks passed, with user confirmation that the same preview works on a device; broader device coverage remains unverified. See [Douyin notes (Chinese)](docs/douyin.md).

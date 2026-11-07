@@ -11,6 +11,8 @@
 
 [English README →](README.en.md) ・ 中文(当前)
 
+0.4.0 新增[抖音小程序实验性构建目标](docs/douyin.md)，基础模拟器验收已通过，并收到对应示例真机正常的反馈。
+
 ## 为什么用它 / Why mp-flutter
 
 - **零代码改动**——主工程不用为小程序环境写任何适配代码,照常 `flutter pub get`,工程根跑一条命令就编译成小程序
@@ -26,7 +28,7 @@
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.6
+  flutter_miniprogram: ^0.4.0
 ```
 
 也可以用 git 依赖引入本仓库(公开仓库,无需额外凭证;`ref` 建议固定到一个
@@ -39,7 +41,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.3.6
+      ref: v0.4.0
 ```
 
 **2. 编译**——工程根跑一条命令(先跑 `dart run flutter_miniprogram doctor`
@@ -200,7 +202,7 @@ dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter_wechat
-      ref: v0.3.6
+      ref: v0.4.0
 ```
 
 ```dart

@@ -45,7 +45,7 @@ function normalizeGlDriverStrings(gl) {
 
 const _ctxCache = new WeakMap();
 
-function acquireGlContext(canvas) {
+function acquireGlContext(canvas, options) {
   if (_ctxCache.has(canvas)) return _ctxCache.get(canvas);
 
   const gl = canvas.getContext('webgl', GL_ATTRS);
@@ -59,7 +59,11 @@ function acquireGlContext(canvas) {
 
   const at = gl.getContextAttributes ? gl.getContextAttributes() : null;
   const stencilBits = gl.getParameter(gl.STENCIL_BITS);
-  if ((at && !at.stencil) || !stencilBits) {
+  // 抖音 Canvas V2 会忽略 getContext 的 attrs,默认 framebuffer 没有 stencil。
+  // Skia 可为离屏 render target 分配自己的 stencil;不伪造 GL 参数。
+  // 微信仍保留已有的严格检查。抖音须另做裁剪与像素验收。
+  const requireStencil = !options || options.requireStencil !== false;
+  if (requireStencil && ((at && !at.stencil) || !stencilBits)) {
     throw new Error(
       '[mp-flutter] WebGL 上下文没有 stencil buffer(STENCIL_BITS=' + stencilBits + ')。\n' +
       '小程序的 canvas.getContext 首次调用定死属性(真机上第二次调用还会返回 null)——\n' +
@@ -83,23 +87,35 @@ function loadCanvasKit(opts) {
   const wasmPath = opts.wasmPath;
   const canvasKitInit = opts.canvasKitInit;
 
-  acquireGlContext(canvas);   // 必须在 CanvasKit 之前
+  const wasm = opts.wasm || require('./host.js').getHost().wasm;
+  if (!wasm || typeof wasm.instantiate !== 'function') {
+    return Promise.reject(new Error('当前小程序环境不支持 WASM 实例化'));
+  }
+  acquireGlContext(canvas, { requireStencil: opts.requireStencil !== false });   // 必须在 CanvasKit 之前
 
-  return canvasKitInit({
-    print: (t) => console.log('[canvaskit] ' + t),
-    printErr: (t) => console.error('[canvaskit] ' + t),
-    instantiateWasm: function (imports, successCallback) {
-      WXWebAssembly.instantiate(wasmPath, imports)
-        .then(function (r) { successCallback(r.instance, r.module); })
-        .catch(function (e) {
-          console.error('[mp-flutter] wasm 加载失败 ' + wasmPath + ': ' + (e && e.message || e));
-        });
-      // 用 Object() 而非 {} 字面量:{} 字面量的原型来自当前执行 realm,
-      // 跨 vm.createContext 边界后与宿主 realm 的 Object.prototype 不再相等,
-      // 会让调用方用宿主字面量 {} 做 deepStrictEqual 比较时失败。
-      // Object() 显式调用注入的宿主构造函数,产出的对象走宿主 realm 的原型链。
-      return Object();   // 空对象 = 告诉 emscripten 走异步
-    },
+  return new Promise(function (resolve, reject) {
+    let initialized;
+    try {
+      initialized = canvasKitInit({
+        print: (t) => console.log('[canvaskit] ' + t),
+        printErr: (t) => console.error('[canvaskit] ' + t),
+        instantiateWasm: function (imports, successCallback) {
+          Promise.resolve().then(function () { return wasm.instantiate(wasmPath, imports); })
+            .then(function (r) { successCallback(r.instance, r.module); })
+            .catch(function (e) {
+              const failure = new Error('[mp-flutter] wasm 加载失败 ' + wasmPath + ': ' + (e && e.message || e));
+              console.error(failure.message);
+              reject(failure);
+            });
+          // 用 Object() 而非 {} 字面量:{} 字面量的原型来自当前执行 realm,
+          // 跨 vm.createContext 边界后与宿主 realm 的 Object.prototype 不再相等,
+          // 会让调用方用宿主字面量 {} 做 deepStrictEqual 比较时失败。
+          // Object() 显式调用注入的宿主构造函数,产出的对象走宿主 realm 的原型链。
+          return Object();   // 空对象 = 告诉 emscripten 走异步
+        },
+      });
+    } catch (e) { reject(e); return; }
+    Promise.resolve(initialized).then(resolve, reject);
   });
 }
 

@@ -55,28 +55,28 @@ echo
 
 step() { echo; echo "———— $1 ————"; }
 
-step "1/6 node --test tools/mp-context/*.test.js"
+step "1/7 node --test tools/mp-context/*.test.js"
 node --test tools/mp-context/*.test.js
 
-step "2/6 node --test packages/mp_flutter/js/test/*.test.js"
+step "2/7 node --test packages/mp_flutter/js/test/*.test.js"
 node --test packages/mp_flutter/js/test/*.test.js
 
-step "3/6 dart pub get + dart analyze(packages/mp_flutter)"
+step "3/7 dart pub get + dart analyze(packages/mp_flutter)"
 (cd packages/mp_flutter && dart pub get)
 (cd packages/mp_flutter && dart analyze)
 
-step "4/6 dart test(packages/mp_flutter,含 tag=slow 消费者冒烟)"
+step "4/7 dart test(packages/mp_flutter,含 tag=slow 消费者冒烟)"
 (cd packages/mp_flutter && dart test)
 (cd packages/mp_flutter && dart test --run-skipped -t slow test/consumer_smoke_test.dart)
 
-step "5/6 flutter test(mp_flutter_native / mp_flutter_wechat / example)"
+step "5/7 flutter test(mp_flutter_native / mp_flutter_wechat / example)"
 (cd packages/mp_flutter_native && flutter test)
 (cd packages/mp_flutter_native && flutter test --platform chrome test/registry_web_browser_test.dart)
 (cd packages/mp_flutter_wechat && flutter test)
 (cd packages/mp_flutter_wechat && flutter test --platform chrome test/channel_web_browser_test.dart)
 (cd example && flutter test)
 
-step "6/6 构建冒烟:dart run flutter_miniprogram(example)"
+step "6/7 构建冒烟:dart run flutter_miniprogram(example)"
 rm -rf example/build/weapp
 # 显式 --flutter(M7):不依赖 D1 加入的 package_config.json 自动探测,也不
 # 依赖 PATH 顺序——本脚本已经确定了要用哪个 SDK($FLUTTER_BIN),直接告诉
@@ -88,6 +88,22 @@ test -f example/build/weapp/app.json || {
   exit 1
 }
 echo "✓ app.json 存在;各分包体积已由 flutter_miniprogram 构建期 SizeReport 校验(超限会非零退出)"
+
+step "7/7 抖音构建冒烟"
+(cd tools/e2e/apps/mpf_douyin && flutter pub get)
+dart run packages/mp_flutter/bin/flutter_miniprogram.dart \
+  --platform douyin --project tools/e2e/apps/mpf_douyin \
+  --output tools/e2e/out/mpf_douyin-ci --flutter "$FLUTTER_BIN"
+node <<'JS'
+const fs = require('fs');
+const assert = require('node:assert/strict');
+const root = 'tools/e2e/out/mpf_douyin-ci/';
+const app = JSON.parse(fs.readFileSync(root + 'app.json'));
+assert.ok(app.subpackages.every(p => p.common && p.pages.length === 0));
+assert.ok(fs.existsSync(root + 'host.js'));
+assert.ok(fs.existsSync(root + 'pages/flutter/flutter.ttml'));
+assert.equal(JSON.parse(fs.readFileSync(root + 'project.config.json')).douyinProjectType, 'native');
+JS
 
 echo
 echo "======================"
