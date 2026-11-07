@@ -13,7 +13,7 @@
 
 自 flutter_miniprogram 0.3.5 起，版本矩阵只记录验证范围，默认不再作为构建白名单。
 其他 Flutter 版本会显示警告并继续尝试构建，补丁匹配、工具链和包体积检查仍照常执行。
-Flutter 3.47.9 已有用户反馈可运行，但尚未完成本项目完整验收。
+Flutter 3.47.9 的字体补丁失配在 0.3.6 修复；构建和模拟器验收记录见下方。
 
 **运行 `dart run flutter_miniprogram`(构建 CLI 本身)只支持 macOS/Linux,Windows 未
 支持**——回归套件、CI(`ubuntu-latest`)与全部本地开发都在 macOS/Linux 上跑,
@@ -24,6 +24,7 @@ Flutter 3.47.9 已有用户反馈可运行，但尚未完成本项目完整验�
 |---|---|---|
 | Flutter(stable) | **3.41.9** | 已跑过完整回归套件;换版本前须先跑一遍 `tools/e2e/run.sh stable`(见 `packages/mp_flutter/lib/src/version_matrix.dart`) |
 | Flutter(stable) | **3.47.4** | 需 flutter_miniprogram ≥0.3.3;本地完整 CI、微信开发者工具五项 E2E 与平台视图伴生层验收通过;真机地图显示已反馈正常,其他真机能力待验 |
+| Flutter(stable) | **3.47.9** | 需 flutter_miniprogram ≥0.3.6；真实 SDK 的本地完整检查、release/profile 构建及微信开发者工具五项 E2E 通过；真机待验，见 [验证记录](verification/flutter-3.47.9.md) |
 | Flutter(`flutter_ohos` fork) | **3.41.10-ohos-0.0.2-beta** | 已知与 stable 的产物差异:未打包 Material shaders(`ink_sparkle.frag`、`stretch_effect.frag`)——用到 `InkSparkle` 水波纹或 overscroll 拉伸效果的 App 运行时会取不到这两个资源 |
 | Node.js | **≥ 18** | `main.dart.js` 分片(`packages/mp_flutter/js/split.js`)与 esbuild 自动安装均依赖 Node;`dart run flutter_miniprogram doctor` 会检查 |
 | `brotli` | — | 压缩 `canvaskit.wasm` 依赖它,macOS/Linux 都不预装;macOS `brew install brotli`,Debian/Ubuntu(含 CI)`apt install brotli`;缺失时构建以退出码 6 失败,`doctor` 会检查 |
