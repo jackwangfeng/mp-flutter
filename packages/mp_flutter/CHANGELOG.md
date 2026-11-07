@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.6 — 2026-11-07
+
+- Fix Flutter 3.47.9 font patch failure after the version allowlist was relaxed in 0.3.5. Detect generated JS structure instead of selecting the font patch by an exact Flutter version.
+- Keep legacy font patching and reject missing, duplicate or mixed detection paths. Add Flutter 3.47.9 to CI.
+
 ## 0.3.5 — 2026-11-07
 
 - Allow unverified Flutter versions to build with a warning instead of enforcing an exact version allowlist. Keep transform matching and artifact checks.

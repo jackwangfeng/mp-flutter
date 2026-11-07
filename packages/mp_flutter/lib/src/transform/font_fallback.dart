@@ -21,13 +21,9 @@ import 'canvaskit_js.dart' show TransformFailure;
 /// 失配时抛 [TransformFailure] 点名是哪一处,不静默产出缺补丁的文件——缺补丁
 /// 时合一字体虽然注册了,首屏照样拉几十个分片、多次整体重排,极难看出原因。
 ///
-/// [usesUnresolvedCodePoints] 用于 Flutter 3.47.4:引擎改为排版后读取 CanvasKit
-/// 的缺字列表,已经考虑全局回退字体,只需补丁 A 与新缺字入口的结构检查。
-String patchFontFallback(
-  String source, {
-  required String family,
-  bool usesUnresolvedCodePoints = false,
-}) {
+/// 按产物结构识别缺字检测路径,不依赖 Flutter 版本号。新版引擎排版后读取
+/// CanvasKit 的缺字列表,已考虑全局回退字体,只需补丁 A;未知或重复入口报错。
+String patchFontFallback(String source, {required String family}) {
   final famJs = jsonEncode(family);
   var out = source;
 
@@ -55,14 +51,24 @@ String patchFontFallback(
     '"Roboto",$famJs',
   );
 
+  final b = RegExp(
+    r'(<\s*160\s*\|\|[\s\S]{0,500}?)'
+    r'if\s*\(\s*([\w$]+(?:\.[\w$]+)*)\.([\w$]+)\(\s*([\w$]+)\s*,\s*([\w$]+)\s*\)'
+    r'\.length\s*!==\s*0\s*\)\s*([\w$]+)\.([\w$]+)\(\s*\4\s*\)',
+  );
+  final bMatches = b.allMatches(out).toList();
+
   // Flutter 3.47.4 在 paragraph.layout 后通过 CanvasKit 获取真正缺失的码点。
   // globalFontFallbacks 已参与 paragraph 的字体选择,无需再改写旧版缺字检测。
   // 仍检查这个新入口,避免上游变化时静默略过补丁 B。
-  if (usesUnresolvedCodePoints) {
-    if (RegExp(r'\.unresolvedCodepoints\(\)').allMatches(out).length != 1) {
+  final unresolvedCount = RegExp(
+    r'\.unresolvedCodepoints\(\)',
+  ).allMatches(out).length;
+  if (unresolvedCount > 0) {
+    if (unresolvedCount != 1 || bMatches.isNotEmpty) {
       throw const TransformFailure(
         '回退字体补丁 B(CanvasKit unresolvedCodepoints)',
-        '期望恰好 1 处 paragraph.unresolvedCodepoints(),请检查新引擎的缺字检测。',
+        '期望恰好 1 处 paragraph.unresolvedCodepoints() 且不含旧版检测入口,请检查引擎的缺字检测。',
         file: 'main.dart.js',
       );
     }
@@ -74,12 +80,6 @@ String patchFontFallback(
   //   ...
   //   if (_registry.getMissingCodePoints(codePoints, fontFamilies).length !== 0)
   //     addMissingCodePoints(codePoints)
-  final b = RegExp(
-    r'(<\s*160\s*\|\|[\s\S]{0,500}?)'
-    r'if\s*\(\s*([\w$]+(?:\.[\w$]+)*)\.([\w$]+)\(\s*([\w$]+)\s*,\s*([\w$]+)\s*\)'
-    r'\.length\s*!==\s*0\s*\)\s*([\w$]+)\.([\w$]+)\(\s*\4\s*\)',
-  );
-  final bMatches = b.allMatches(out).toList();
   if (bMatches.length != 1) {
     throw TransformFailure(
       '回退字体补丁 B(ensureFontsSupportText 缺字检测)',

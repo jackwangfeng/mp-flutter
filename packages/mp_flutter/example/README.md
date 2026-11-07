@@ -12,7 +12,7 @@ In your existing Flutter app's `pubspec.yaml`:
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.5
+  flutter_miniprogram: ^0.3.6
 ```
 
 Then:

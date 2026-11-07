@@ -49,28 +49,21 @@ const _profile = r'''
 ''';
 
 void main() {
-  test('3.47.4 使用 CanvasKit 缺字检测,只补回退表', () {
+  test('新版产物自动识别 CanvasKit 缺字检测,无需传版本开关', () {
     final source =
         _minified.substring(0, _minified.indexOf('A.a8S.prototype=')) +
         'function missing(p){return p.unresolvedCodepoints()}';
-    final out = patchFontFallback(
-      source,
-      family: 'F',
-      usesUnresolvedCodePoints: true,
-    );
+    final out = patchFontFallback(source, family: 'F');
     expect(out, contains('["Roboto","F"]'));
     expect(out, contains('return p.unresolvedCodepoints()'));
     expect(out, isNot(contains('__mpMiss')));
     for (final broken in [
       source.replaceFirst('.unresolvedCodepoints()', '.changed()'),
       '$source; other.unresolvedCodepoints()',
+      '$_minified; function missing(p){return p.unresolvedCodepoints()}',
     ]) {
       expect(
-        () => patchFontFallback(
-          broken,
-          family: 'F',
-          usesUnresolvedCodePoints: true,
-        ),
+        () => patchFontFallback(broken, family: 'F'),
         throwsA(isA<TransformFailure>()),
       );
     }

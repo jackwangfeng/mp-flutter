@@ -24,7 +24,7 @@ mp-flutter compiles an existing Flutter project into a WeChat Mini Program. The 
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.5
+  flutter_miniprogram: ^0.3.6
 ```
 
 For an unreleased commit or a private fork, use a git dependency instead:
@@ -35,7 +35,7 @@ dev_dependencies:
     git:
       url: https://github.com/jackwangfeng/mp-flutter.git
       path: packages/mp_flutter
-      ref: v0.3.5
+      ref: v0.3.6
 ```
 
 **2. Compile** — from the project root (running `dart run flutter_miniprogram doctor` first to self-check your toolchain is recommended):

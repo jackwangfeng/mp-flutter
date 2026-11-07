@@ -278,7 +278,6 @@ Future<SizeReport> runPipeline({
       ? patchFontFallback(
           mainJsRaw,
           family: kCjkFontFamily,
-          usesUnresolvedCodePoints: version.version == '3.47.4',
         )
       : mainJsRaw;
   // 正则 Unicode 属性转义 \p{…} 改写成码点区间(安卓微信 JS 引擎不带 ICU,

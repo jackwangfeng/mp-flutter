@@ -26,7 +26,7 @@ for runtime checks and device limitations.
 
 ```yaml
 dev_dependencies:
-  flutter_miniprogram: ^0.3.5
+  flutter_miniprogram: ^0.3.6
 ```
 
 A git dependency to this repository also works (public repo, no extra
