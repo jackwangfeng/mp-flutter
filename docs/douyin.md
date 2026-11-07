@@ -76,3 +76,14 @@ dart run packages/mp_flutter/bin/flutter_miniprogram.dart \
 `tt.request` 都报 `protocol mismatch`，检查 IDE 进程继承的代理环境变量；
 本次通过不继承终端代理变量的 IDE 进程验证，未修改系统代理。不要将该类错误与
 Flutter 适配问题混为一谈。正式业务使用自己的 HTTPS 服务与已配置的域名。
+
+### 发布包复核
+
+从 pub.dev 正常安装正式 `flutter_miniprogram 0.4.0` 到全新工程，确认依赖来自
+`hosted/pub.dev/flutter_miniprogram-0.4.0`。使用 Flutter 3.47.9 构建并在独立抖音
+工具窗口验收，页面 `pages/flutter/flutter` 启动正常、错误栏为空、控制台无 error；
+中文/资源图片/裁剪、HTTPS 网络图片、GET/POST `你好😀`、跨重启存储、点击计数及
+`正式包验证😀` 的输入与确认事件均通过。该复核使用正式下载包，未用源码 path 依赖替代。
+
+[0.4.0 最终三版本 CI](https://github.com/jackwangfeng/mp-flutter/actions/runs/42371222210)
+全部通过，包含每个 SDK 的微信和抖音构建冒烟。手机验收范围仍以“用户反馈”小节为准。
